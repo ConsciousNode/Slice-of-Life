@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Slice of Life v0.1 — ConsciousNode SoftWorks</title>
+<!--
+  Slice of Life v0.1
+  ConsciousNode SoftWorks · 2026-06-13
+  Kham Kizer · Kehai Interim
+
+  Volumetric voxel modeler. No wireframes. No polygons.
+  Build 3D models slice by slice, the way a 3D printer builds.
+  Physics-native geometry — models have correct interiors by default.
+  No clipping: the model IS its own physics object.
+
+  Exports: .soli  (ConsciousNode Volumetric Solid Format v0.1)
+
+  Drawing tools: draw · erase · rect · circle · ellipse · line · fill
+  Keyboard: Ctrl+Z/Shift+Z = undo/redo · [ ] = brush size
+            ↑↓ or ,. = navigate Z slices · d e r c l f = tool shortcuts
+
+  Canvas credit: drawing engine architecture ported from Jiden Furui v3.1
+  Export credit: blob/download pattern from FPSS v1.0
+  Array patterns: informed by Autoencofabulator v0.2
+
+  Xinu-compliant. Zero dependencies. Single file. MIT License.
+-->
+<style>
+:root {
+  --bg:    #0b0a0f;
+  --bg2:   #131120;
+  --bg3:   #1a1828;
+  --border:#2a2640;
+  --amber: #c89b4a;
+  --adim:  #6a5220;
+  --aglow: rgba(200,155,74,.10);
+  --teal:  #4ab8c8;
+  --tglow: rgba(74,184,200,.10);
+  --text:  #e4dff0;
+  --muted: #7a7498;
+  --ok:    #86efac;
+  --err:   #f87171;
+  --mono:  ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
+  --t:     .14s ease;
+}
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+html,body { height:100%; background:var(--bg); color:var(--text);
+            font-family:var(--mono); font-size:12px; overflow:hidden; }
+::-webkit-scrollbar { width:4px; height:4px; }
+::-webkit-scrollbar-thumb { background:var(--border); border-radius:4px; }
+
+/* ── APP SHELL ─────────────────────────────────────────────── */
+#app { display:flex; flex-direction:column; height:100dvh; }
+
+/* ── HEADER ────────────────────────────────────────────────── */
+header {
+  display:flex; align-items:center; gap:7px; padding:6px 12px;
+  background:var(--bg2); border-bottom:1px solid var(--border); flex-shrink:0;
+}
+.logo      { font-size:13px; font-weight:800; color:var(--amber); letter-spacing:-.2px; }
+.logo-sub  { font-size:8px; color:var(--muted); margin-top:1px; }
+.h-sep     { width:1px; height:18px; background:var(--border); flex-shrink:0; }
+.ml-auto   { margin-left:auto; }
+.res-group { display:flex; align-items:center; gap:3px; }
+.rl        { font-size:8px; color:var(--muted); text-transform:uppercase; }
+.ri {
+  width:36px; background:var(--bg3); border:1px solid var(--border);
+  color:var(--text); font-family:var(--mono); font-size:10px;
+  padding:2px 3px; text-align:center;
+}
+.ri:focus { outline:none; border-color:var(--amber); }
+.hbtn {
+  padding:3px 8px; background:var(--bg3); border:1px solid var(--border);
+  color:var(--muted); font-family:var(--mono); font-size:9px;
+  cursor:pointer; transition:all var(--t); letter-spacing:.05em; white-space:nowrap;
+}
+.hbtn:hover    { border-color:var(--amber); color:var(--amber); }
+.hbtn.pri      { background:var(--aglow); border-color:var(--adim); color:var(--amber); }
+.hbtn.pri:hover{ border-color:var(--amber); }
+.hbtn:disabled { opacity:.3; cursor:not-allowed; }
+.hbtn:disabled:hover { border-color:var(--border); color:var(--muted); }
+
+/* ── MAIN ROW ──────────────────────────────────────────────── */
+.main-row { display:flex; flex:1; overflow:hidden; }
+
+/* ── TOOLS SIDEBAR ─────────────────────────────────────────── */
+aside {
+  width:168px; flex-shrink:0; background:var(--bg2);
+  border-right:1px solid var(--border);
+  display:flex; flex-direction:column; overflow-y:auto;
+}
+.sec { padding:8px; border-bottom:1px solid var(--border); }
+.sec:last-child { border-bottom:none; flex:1; }
+.sec-lbl { font-size:7px; color:var(--muted); letter-spacing:.12em;
+           text-transform:uppercase; margin-bottom:5px; }
+
+/* tool grid */
+.tgrid { display:grid; grid-template-columns:1fr 1fr; gap:3px; }
+.tbtn {
+  display:flex; flex-direction:column; align-items:center; gap:2px;
+  padding:5px 2px; background:var(--bg3); border:1px solid var(--border);
+  color:var(--muted); font-size:7px; cursor:pointer; transition:all var(--t);
+  letter-spacing:.04em;
+}
+.tbtn .ic { font-size:13px; line-height:1; }
+.tbtn:hover  { border-color:var(--teal); color:var(--teal); }
+.tbtn.active { border-color:var(--teal); color:var(--teal); background:var(--tglow); }
+
+/* brush */
+.brush-row { display:flex; align-items:center; gap:5px; }
+.bval { font-size:13px; color:var(--teal); min-width:20px; text-align:center; font-weight:700; }
+input[type=range] {
+  flex:1; height:3px; -webkit-appearance:none; appearance:none;
+  background:var(--border); border-radius:2px; outline:none; cursor:pointer;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance:none; width:11px; height:11px; border-radius:50%;
+  background:var(--teal); cursor:pointer;
+}
+
+/* material list */
+.mlist { display:flex; flex-direction:column; gap:2px; }
+.mbtn {
+  display:flex; align-items:center; gap:5px; padding:4px 5px;
+  background:var(--bg3); border:1px solid var(--border);
+  cursor:pointer; transition:all var(--t);
+}
+.mbtn:hover  { border-color:var(--amber); }
+.mbtn.active { border-color:var(--amber); background:var(--aglow); }
+.msw  { width:10px; height:10px; border-radius:2px; flex-shrink:0;
+        border:1px solid rgba(255,255,255,.08); }
+.minfo { flex:1; min-width:0; }
+.mname { font-size:9px; color:var(--text); }
+.mbtn.active .mname { color:var(--amber); }
+.mdens { font-size:7px; color:var(--muted); }
+
+/* ── CENTER WORKSPACE ──────────────────────────────────────── */
+#workspace { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+
+/* z-nav */
+#znav {
+  display:flex; align-items:center; gap:5px; padding:5px 10px;
+  background:var(--bg2); border-bottom:1px solid var(--border); flex-shrink:0;
+}
+.zlbl { font-size:8px; color:var(--muted); text-transform:uppercase; }
+.zval { font-size:10px; color:var(--teal); min-width:52px; text-align:right; }
+.nbtn {
+  padding:2px 7px; background:var(--bg3); border:1px solid var(--border);
+  color:var(--text); font-size:11px; cursor:pointer; transition:all var(--t);
+}
+.nbtn:hover { border-color:var(--teal); color:var(--teal); }
+
+/* slice canvas wrap */
+#swrap {
+  flex:1; display:flex; align-items:center; justify-content:center;
+  overflow:hidden; position:relative; padding:12px;
+}
+#scv, #ocv {
+  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+  image-rendering:pixelated; cursor:crosshair;
+}
+#scv { pointer-events:none; }
+#ocv { pointer-events:all; opacity:.8; }
+
+/* ── 3D PREVIEW ─────────────────────────────────────────────── */
+#preview {
+  width:268px; flex-shrink:0; background:var(--bg2);
+  border-left:1px solid var(--border); display:flex; flex-direction:column;
+}
+.pvhdr {
+  padding:5px 10px; border-bottom:1px solid var(--border); flex-shrink:0;
+  font-size:7px; color:var(--muted); letter-spacing:.12em; text-transform:uppercase;
+  display:flex; align-items:center; justify-content:space-between;
+}
+#pcv { flex:1; width:100%; display:block; cursor:grab; min-height:0; }
+#pcv:active { cursor:grabbing; }
+.pvhint {
+  padding:4px 8px; font-size:7px; color:var(--muted); text-align:center;
+  border-top:1px solid var(--border); flex-shrink:0;
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- HEADER -->
+  <header>
+    <div>
+      <div class="logo">Slice of Life</div>
+      <div class="logo-sub">ConsciousNode SoftWorks · v0.1</div>
+    </div>
+    <div class="h-sep"></div>
+    <div class="res-group">
+      <span class="rl">X</span><input type="number" class="ri" id="rx" value="32" min="4" max="128">
+      <span class="rl">Y</span><input type="number" class="ri" id="ry" value="32" min="4" max="128">
+      <span class="rl">Z</span><input type="number" class="ri" id="rz" value="32" min="4" max="128">
+      <button class="hbtn" onclick="newScene()">NEW</button>
+    </div>
+    <div class="h-sep"></div>
+    <button class="hbtn" id="btn-undo" onclick="undo()" disabled>↩ UNDO</button>
+    <button class="hbtn" id="btn-redo" onclick="redo()" disabled>↪ REDO</button>
+    <div class="h-sep ml-auto"></div>
+    <button class="hbtn" onclick="importSoli()">OPEN .SOLI</button>
+    <button class="hbtn pri" onclick="exportSoli()">EXPORT .SOLI</button>
+  </header>
+
+  <div class="main-row">
+
+    <!-- TOOLS SIDEBAR -->
+    <aside>
+      <div class="sec">
+        <div class="sec-lbl">Tool</div>
+        <div class="tgrid">
+          <button class="tbtn active" data-tool="draw"    onclick="setTool('draw')">    <span class="ic">✏️</span>DRAW</button>
+          <button class="tbtn"        data-tool="erase"   onclick="setTool('erase')">   <span class="ic">⬜</span>ERASE</button>
+          <button class="tbtn"        data-tool="rect"    onclick="setTool('rect')">    <span class="ic">▭</span>RECT</button>
+          <button class="tbtn"        data-tool="circle"  onclick="setTool('circle')">  <span class="ic">◯</span>CIRCLE</button>
+          <button class="tbtn"        data-tool="ellipse" onclick="setTool('ellipse')"> <span class="ic">⬯</span>ELLIPSE</button>
+          <button class="tbtn"        data-tool="line"    onclick="setTool('line')">    <span class="ic">╱</span>LINE</button>
+          <button class="tbtn"        data-tool="fill"    onclick="setTool('fill')">    <span class="ic">▓</span>FILL</button>
+        </div>
+      </div>
+      <div class="sec">
+        <div class="sec-lbl">Brush <span style="color:var(--teal);font-size:7px">  [ ]</span></div>
+        <div class="brush-row">
+          <span class="bval" id="bval">1</span>
+          <input type="range" id="bsl" min="1" max="16" value="1" oninput="setBrush(+this.value)">
+        </div>
+      </div>
+      <div class="sec">
+        <div class="sec-lbl">Material</div>
+        <div class="mlist" id="mlist"></div>
+      </div>
+    </aside>
+
+    <!-- CENTER: SLICE EDITOR -->
+    <div id="workspace">
+      <div id="znav">
+        <span class="zlbl">SLICE Z</span>
+        <button class="nbtn" onclick="zStep(-1)">◀</button>
+        <input type="range" id="zsl" min="0" max="31" value="0"
+               oninput="setSlice(+this.value)" style="flex:1">
+        <button class="nbtn" onclick="zStep(1)">▶</button>
+        <span class="zval" id="zval">0 / 31</span>
+      </div>
+      <div id="swrap">
+        <canvas id="scv"></canvas>
+        <canvas id="ocv"></canvas>
+      </div>
+    </div>
+
+    <!-- 3D PREVIEW -->
+    <div id="preview">
+      <div class="pvhdr">
+        <span>3D PREVIEW</span>
+        <span style="color:var(--teal)">ISO · DRAG ROTATE · SCROLL ZOOM</span>
+      </div>
+      <canvas id="pcv"></canvas>
+      <div class="pvhint">↑↓ SLICES · [ ] BRUSH · d e r c l f TOOLS · CTRL+Z UNDO</div>
+    </div>
+
+  </div>
+</div>
+
+<input type="file" id="file-in" accept=".soli" style="display:none" onchange="loadSoli(event)">
+
+<script>
+'use strict';
+
+// ════════════════════════════════════════════════════════════════
+//  MATERIALS  (density-coded, cold→hot = light→dense)
+// ════════════════════════════════════════════════════════════════
+const MAT = [
+  { name:'void',    density:0,      elast:0,    color:null        },
+  { name:'gas',     density:0.001,  elast:0.95, color:'#88ccff'   },
+  { name:'liquid',  density:1.000,  elast:0,    color:'#3377ff'   },
+  { name:'soft',    density:0.500,  elast:0.70, color:'#55dd88'   },
+  { name:'tissue',  density:1.100,  elast:0.40, color:'#ffaa55'   },
+  { name:'bone',    density:1.900,  elast:0.08, color:'#eeeebb'   },
+  { name:'polymer', density:1.400,  elast:0.30, color:'#bb88ff'   },
+  { name:'metal',   density:7.800,  elast:0.05, color:'#8899bb'   },
+  { name:'dense',   density:11.300, elast:0.02, color:'#ff5533'   },
+];
+
+// ════════════════════════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════════════════════════
+const S = {
+  RX:32, RY:32, RZ:32,
+  voxels: new Uint8Array(32*32*32),
+  slice:0, mat:1, tool:'draw', brush:1,
+  history:[], hIdx:-1, MAX_HIST:50,
+  // drawing
+  painting:false, shapeStart:null, lastPt:null,
+  // preview
+  rotY: Math.PI / 5,
+  zoom: 1.0,
+};
+
+// ════════════════════════════════════════════════════════════════
+//  VOXEL ACCESS
+// ════════════════════════════════════════════════════════════════
+const VI  = (x,y,z) => z*S.RX*S.RY + y*S.RX + x;
+const inB = (x,y,z) => x>=0&&x<S.RX&&y>=0&&y<S.RY&&z>=0&&z<S.RZ;
+// OOB = 0 (empty) — boundary voxels always show their edge faces
+const getV  = (x,y,z) => inB(x,y,z) ? S.voxels[VI(x,y,z)] : 0;
+const setV  = (x,y,z,m) => { if(inB(x,y,z)) S.voxels[VI(x,y,z)] = m; };
+
+// ════════════════════════════════════════════════════════════════
+//  HISTORY  (snapshot-based, max 50 steps)
+// ════════════════════════════════════════════════════════════════
+function pushHist() {
+  S.history.splice(S.hIdx + 1);                    // discard redo
+  S.history.push(S.voxels.slice());                // snapshot
+  if (S.history.length > S.MAX_HIST) S.history.shift();
+  S.hIdx = S.history.length - 1;
+  updUndo();
+}
+function undo() {
+  if (S.hIdx <= 0) return;
+  S.voxels.set(S.history[--S.hIdx]);
+  renderAll(); updUndo();
+}
+function redo() {
+  if (S.hIdx >= S.history.length - 1) return;
+  S.voxels.set(S.history[++S.hIdx]);
+  renderAll(); updUndo();
+}
+function updUndo() {
+  document.getElementById('btn-undo').disabled = S.hIdx <= 0;
+  document.getElementById('btn-redo').disabled = S.hIdx >= S.history.length - 1;
+}
+
+// ════════════════════════════════════════════════════════════════
+//  DRAWING PRIMITIVES
+// ════════════════════════════════════════════════════════════════
+function brushAt(vx, vy, mat) {
+  const b = S.brush, h = Math.floor(b / 2);
+  for (let dy = -h; dy < b - h; dy++)
+    for (let dx = -h; dx < b - h; dx++)
+      setV(vx + dx, vy + dy, S.slice, mat);
+}
+
+function drawLine(x0, y0, x1, y1, mat) {
+  // Bresenham's with brush
+  let dx = Math.abs(x1-x0), dy = Math.abs(y1-y0);
+  let sx = x0<x1?1:-1, sy = y0<y1?1:-1, err = dx-dy;
+  let x = x0, y = y0;
+  for (;;) {
+    brushAt(x, y, mat);
+    if (x===x1 && y===y1) break;
+    const e2 = 2*err;
+    if (e2 > -dy) { err -= dy; x += sx; }
+    if (e2 <  dx) { err += dx; y += sy; }
+  }
+}
+
+function drawRect(x0, y0, x1, y1, mat) {
+  const lx=Math.min(x0,x1), gx=Math.max(x0,x1);
+  const ly=Math.min(y0,y1), gy=Math.max(y0,y1);
+  for (let y=ly; y<=gy; y++)
+    for (let x=lx; x<=gx; x++)
+      setV(x, y, S.slice, mat);
+}
+
+function drawCircle(cx, cy, r, mat) {
+  for (let y=cy-r; y<=cy+r; y++)
+    for (let x=cx-r; x<=cx+r; x++)
+      if ((x-cx)**2 + (y-cy)**2 <= r*r) setV(x, y, S.slice, mat);
+}
+
+function drawEllipse(x0, y0, x1, y1, mat) {
+  const cx=(x0+x1)/2, cy=(y0+y1)/2;
+  const rx=Math.abs(x1-x0)/2, ry=Math.abs(y1-y0)/2;
+  if (rx < 0.5 || ry < 0.5) { setV(Math.round(cx), Math.round(cy), S.slice, mat); return; }
+  for (let y=Math.min(y0,y1); y<=Math.max(y0,y1); y++)
+    for (let x=Math.min(x0,x1); x<=Math.max(x0,x1); x++)
+      if (((x-cx)/rx)**2 + ((y-cy)/ry)**2 <= 1) setV(x, y, S.slice, mat);
+}
+
+function floodFill(vx, vy, mat) {
+  const target = getV(vx, vy, S.slice);
+  if (target === mat) return;
+  const q = [[vx, vy]], seen = new Set();
+  seen.add(vx * 10000 + vy);
+  while (q.length) {
+    const [cx, cy] = q.shift();
+    if (getV(cx, cy, S.slice) !== target) continue;
+    setV(cx, cy, S.slice, mat);
+    for (const [nx, ny] of [[cx+1,cy],[cx-1,cy],[cx,cy+1],[cx,cy-1]]) {
+      const k = nx * 10000 + ny;
+      if (inB(nx, ny, S.slice) && !seen.has(k)) { seen.add(k); q.push([nx, ny]); }
+    }
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+//  SLICE CANVAS RENDERING
+// ════════════════════════════════════════════════════════════════
+function drawSlice() {
+  const cv  = document.getElementById('scv');
+  const ctx = cv.getContext('2d');
+  const W   = cv.width, H = cv.height;
+  const {RX, RY, slice} = S;
+  const cw  = W / RX, ch = H / RY;
+
+  // Background + checker for void
+  ctx.fillStyle = '#0d0b16';
+  ctx.fillRect(0, 0, W, H);
+  for (let y=0; y<RY; y++)
+    for (let x=0; x<RX; x++)
+      if ((x+y) % 2 === 0) {
+        ctx.fillStyle = '#111019';
+        ctx.fillRect(x*cw, y*ch, cw+.5, ch+.5);
+      }
+
+  // Voxels — Y-flipped (vy=0 = bottom of canvas = visual bottom)
+  for (let y=0; y<RY; y++)
+    for (let x=0; x<RX; x++) {
+      const m = getV(x, y, slice);
+      if (!m) continue;
+      ctx.fillStyle = MAT[m].color;
+      ctx.fillRect(x*cw, (RY-1-y)*ch, cw+.5, ch+.5);
+    }
+
+  // Grid lines (skip when too dense)
+  if (cw >= 3) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.lineWidth   = .5;
+    for (let x=0; x<=RX; x++) { ctx.beginPath(); ctx.moveTo(x*cw,0); ctx.lineTo(x*cw,H); ctx.stroke(); }
+    for (let y=0; y<=RY; y++) { ctx.beginPath(); ctx.moveTo(0,y*ch); ctx.lineTo(W,y*ch); ctx.stroke(); }
+  }
+
+  // Slice border
+  ctx.strokeStyle = 'rgba(74,184,200,.25)';
+  ctx.lineWidth   = 1.5;
+  ctx.strokeRect(1, 1, W-2, H-2);
+}
+
+// ════════════════════════════════════════════════════════════════
+//  OVERLAY — shape preview ghost
+// ════════════════════════════════════════════════════════════════
+function clearOvr() {
+  const oc = document.getElementById('ocv');
+  oc.getContext('2d').clearRect(0, 0, oc.width, oc.height);
+}
+
+function drawPreview(x0, y0, x1, y1) {
+  const oc  = document.getElementById('ocv');
+  const ctx = oc.getContext('2d');
+  ctx.clearRect(0, 0, oc.width, oc.height);
+  const {RX, RY, tool, mat, brush} = S;
+  const cw = oc.width / RX, ch = oc.height / RY;
+  const col = mat ? MAT[mat].color : '#ff0000';
+  ctx.strokeStyle = col;
+  ctx.fillStyle   = col + '33';
+  ctx.lineWidth   = 1.5;
+  // Y-flip for screen
+  const sy0 = RY-1-y0, sy1 = RY-1-y1;
+  if (tool === 'rect') {
+    const lx = Math.min(x0,x1)*cw,  ly = Math.min(sy0,sy1)*ch;
+    const rw = (Math.abs(x1-x0)+1)*cw, rh = (Math.abs(sy1-sy0)+1)*ch;
+    ctx.fillRect(lx, ly, rw, rh); ctx.strokeRect(lx, ly, rw, rh);
+  } else if (tool === 'circle') {
+    const r   = Math.round(Math.hypot(x1-x0, y1-y0));
+    const scx = (x0+.5)*cw, scy = (sy0+.5)*ch;
+    const sr  = r * Math.min(cw, ch);
+    ctx.beginPath(); ctx.arc(scx, scy, Math.max(sr,1), 0, Math.PI*2);
+    ctx.fill(); ctx.stroke();
+  } else if (tool === 'ellipse') {
+    const scx = ((x0+x1)/2+.5)*cw;
+    const scy = ((Math.min(sy0,sy1) + Math.abs(sy1-sy0)/2) + .5) * ch;
+    const erx = (Math.abs(x1-x0)/2+.5)*cw, ery = (Math.abs(sy1-sy0)/2+.5)*ch;
+    ctx.beginPath();
+    ctx.ellipse(scx, scy, Math.max(erx,.5), Math.max(ery,.5), 0, 0, Math.PI*2);
+    ctx.fill(); ctx.stroke();
+  } else if (tool === 'line') {
+    ctx.lineWidth = Math.max(1.5, brush * Math.min(cw, ch));
+    ctx.beginPath();
+    ctx.moveTo((x0+.5)*cw, (sy0+.5)*ch);
+    ctx.lineTo((x1+.5)*cw, (sy1+.5)*ch);
+    ctx.stroke();
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+//  POINTER → VOXEL COORD
+// ════════════════════════════════════════════════════════════════
+function ptr2vox(e) {
+  const cv = document.getElementById('ocv');
+  const r  = cv.getBoundingClientRect();
+  let cx, cy;
+  if      (e.touches && e.touches.length)        { cx = e.touches[0].clientX;        cy = e.touches[0].clientY; }
+  else if (e.changedTouches && e.changedTouches.length) { cx = e.changedTouches[0].clientX; cy = e.changedTouches[0].clientY; }
+  else                                           { cx = e.clientX;                   cy = e.clientY; }
+  const px = (cx - r.left)  / r.width;
+  const py = (cy - r.top)   / r.height;
+  return {
+    vx: Math.max(0, Math.min(S.RX-1, Math.floor(px * S.RX))),
+    vy: Math.max(0, Math.min(S.RY-1, Math.floor((1-py) * S.RY))), // Y-flip
+  };
+}
+
+// ════════════════════════════════════════════════════════════════
+//  SLICE CANVAS EVENTS
+// ════════════════════════════════════════════════════════════════
+function onDown(e) {
+  e.preventDefault();
+  S.painting = true;
+  const {vx, vy} = ptr2vox(e);
+  const mat = S.tool === 'erase' ? 0 : S.mat;
+
+  if (S.tool === 'draw' || S.tool === 'erase') {
+    pushHist();
+    brushAt(vx, vy, mat);
+    S.lastPt = {vx, vy};
+    drawSlice();
+  } else if (S.tool === 'fill') {
+    pushHist();
+    floodFill(vx, vy, mat);
+    renderAll();
+  } else {
+    S.shapeStart = {vx, vy};   // shape tools: wait for drag
+  }
+}
+
+function onMove(e) {
+  e.preventDefault();
+  if (!S.painting) return;
+  const {vx, vy} = ptr2vox(e);
+  const mat = S.tool === 'erase' ? 0 : S.mat;
+
+  if (S.tool === 'draw' || S.tool === 'erase') {
+    if (S.lastPt && (S.lastPt.vx !== vx || S.lastPt.vy !== vy)) {
+      drawLine(S.lastPt.vx, S.lastPt.vy, vx, vy, mat);
+      S.lastPt = {vx, vy};
+      drawSlice();
+    }
+  } else if (S.shapeStart) {
+    drawPreview(S.shapeStart.vx, S.shapeStart.vy, vx, vy);
+  }
+}
+
+function onUp(e) {
+  if (!S.painting) return;
+  S.painting = false;
+
+  if (S.shapeStart) {
+    const {vx, vy} = ptr2vox(e);
+    const mat = S.tool === 'erase' ? 0 : S.mat;
+    const {vx:x0, vy:y0} = S.shapeStart;
+    pushHist();
+    if      (S.tool === 'rect')    drawRect(x0, y0, vx, vy, mat);
+    else if (S.tool === 'circle')  drawCircle(x0, y0, Math.round(Math.hypot(vx-x0, vy-y0)), mat);
+    else if (S.tool === 'ellipse') drawEllipse(x0, y0, vx, vy, mat);
+    else if (S.tool === 'line')    drawLine(x0, y0, vx, vy, mat);
+    S.shapeStart = null;
+    clearOvr();
+    renderAll();
+  } else {
+    draw3D();   // update preview after freehand stroke
+  }
+  S.lastPt = null;
+}
+
+function bindSlice() {
+  const oc = document.getElementById('ocv');
+  oc.addEventListener('mousedown', onDown);
+  oc.addEventListener('mousemove', onMove);
+  oc.addEventListener('touchstart', onDown, {passive:false});
+  oc.addEventListener('touchmove',  onMove, {passive:false});
+  oc.addEventListener('touchend',   onUp,   {passive:false});
+}
+// Global mouseup so shapes commit even when cursor leaves canvas
+window.addEventListener('mouseup', onUp);
+
+// ════════════════════════════════════════════════════════════════
+//  3D ISOMETRIC PREVIEW
+//  — Y-axis rotation via rotY, adjustable zoom
+//  — painter's algorithm sort, per-face exposure culling
+//  — 6 faces per voxel, exposed faces only
+// ════════════════════════════════════════════════════════════════
+let _raf = false;
+function draw3D()   { if (_raf) return; _raf=true; requestAnimationFrame(_do3D); }
+function renderAll(){ drawSlice(); draw3D(); }
+
+function _do3D() {
+  _raf = false;
+  const cv  = document.getElementById('pcv');
+  const ctx = cv.getContext('2d');
+  const W   = cv.width, H = cv.height;
+  if (!W || !H) return;
+  ctx.fillStyle = '#0b0a0f';
+  ctx.fillRect(0, 0, W, H);
+
+  const {RX, RY, RZ, rotY, zoom} = S;
+  const span = Math.max(RX, RY, RZ);
+  const CELL = Math.max(2, Math.floor(Math.min(W, H) / (span * 2.2) * zoom));
+  const OX   = W / 2, OY = H * 0.58;
+  const c    = Math.cos(rotY), s = Math.sin(rotY);
+
+  // Isometric screen projection (after Y-axis rotation)
+  function iso(rx, ry, rz) {
+    return {
+      sx: (rx - rz) * CELL + OX,
+      sy: ((rx + rz) * 0.5 - ry) * CELL + OY,
+    };
+  }
+
+  // Collect surface voxels, compute rotated positions
+  const vox = [];
+  for (let gz=0; gz<RZ; gz++)
+    for (let gy=0; gy<RY; gy++)
+      for (let gx=0; gx<RX; gx++) {
+        const m = S.voxels[VI(gx, gy, gz)];
+        if (!m) continue;
+        // Surface check — getV returns 0 for OOB so edge voxels always pass
+        if (getV(gx+1,gy,gz) && getV(gx-1,gy,gz) &&
+            getV(gx,gy+1,gz) && getV(gx,gy-1,gz) &&
+            getV(gx,gy,gz+1) && getV(gx,gy,gz-1)) continue;
+        const rx = gx*c + gz*s;
+        const rz = -gx*s + gz*c;
+        vox.push({gx, gy, gz, rx, ry:gy, rz, m});
+      }
+
+  // Sort back-to-front
+  // depth along camera = rx*(c+s) + ry + rz*(s-c)  [derived from rotated camera direction]
+  const cs = c+s, smc = s-c;
+  vox.sort((a,b) =>
+    (a.rx*cs + a.ry + a.rz*smc) - (b.rx*cs + b.ry + b.rz*smc)
+  );
+
+  // Draw each surface voxel
+  for (const {gx, gy, gz, rx, ry, rz, m} of vox) {
+    const col = MAT[m].color;
+    // Project corner at grid offset (dx,dy,dz) from this voxel
+    const P = (dx, dy, dz) => iso(rx + dx*c + dz*s, ry + dy, rz - dx*s + dz*c);
+
+    const p000=P(0,0,0), p100=P(1,0,0), p010=P(0,1,0), p110=P(1,1,0);
+    const p001=P(0,0,1), p101=P(1,0,1), p011=P(0,1,1), p111=P(1,1,1);
+
+    const face = (pts, bright) => {
+      ctx.fillStyle = adjColor(col, bright);
+      ctx.beginPath();
+      ctx.moveTo(pts[0].sx, pts[0].sy);
+      for (let i=1; i<pts.length; i++) ctx.lineTo(pts[i].sx, pts[i].sy);
+      ctx.closePath(); ctx.fill();
+    };
+
+    // Each face: only draw if neighbor is empty (exposed)
+    if (!getV(gx, gy+1, gz)) face([p010,p110,p111,p011],  0.30);  // top    — brightest
+    if (!getV(gx-1, gy, gz)) face([p000,p010,p011,p001],  0.10);  // left
+    if (!getV(gx, gy, gz-1)) face([p000,p100,p110,p010],  0.15);  // front
+    if (!getV(gx+1, gy, gz)) face([p100,p110,p111,p101],  0.00);  // right  — base
+    if (!getV(gx, gy, gz+1)) face([p001,p101,p111,p011], -0.20);  // back
+    if (!getV(gx, gy-1, gz)) face([p000,p100,p101,p001], -0.40);  // bottom — darkest
+  }
+
+  // Current slice indicator — translucent Z-plane
+  _drawSlicePlane(ctx, OX, OY, CELL, c, s);
+}
+
+function _drawSlicePlane(ctx, OX, OY, CELL, c, s) {
+  const {RX, RY, RZ, slice: gz} = S;
+  function iso(rx, ry, rz) {
+    return { sx:(rx-rz)*CELL+OX, sy:((rx+rz)*0.5-ry)*CELL+OY };
+  }
+  const P = (gx, gy) => {
+    return iso(gx*c + gz*s, gy, -gx*s + gz*c);
+  };
+  const corners = [P(0,0), P(RX,0), P(RX,RY), P(0,RY)];
+  ctx.fillStyle   = 'rgba(74,184,200,0.07)';
+  ctx.strokeStyle = 'rgba(74,184,200,0.45)';
+  ctx.lineWidth   = 1;
+  ctx.setLineDash([3, 3]);
+  ctx.beginPath();
+  ctx.moveTo(corners[0].sx, corners[0].sy);
+  for (let i=1; i<corners.length; i++) ctx.lineTo(corners[i].sx, corners[i].sy);
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+// Brighten (positive) or darken (negative) a hex color by factor [-1..+1]
+function adjColor(hex, f) {
+  const r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16);
+  const k = f >= 0 ? (1 + f*0.5) : (1 + f*0.6);
+  return `rgb(${Math.max(0,Math.min(255,r*k|0))},${Math.max(0,Math.min(255,g*k|0))},${Math.max(0,Math.min(255,b*k|0))})`;
+}
+
+// ════════════════════════════════════════════════════════════════
+//  PREVIEW DRAG + ZOOM
+// ════════════════════════════════════════════════════════════════
+function initPreview() {
+  const cv = document.getElementById('pcv');
+  let drag = false, lx = 0;
+  cv.addEventListener('mousedown',  e => { drag=true; lx=e.clientX; });
+  window.addEventListener('mousemove', e => {
+    if (!drag) return;
+    S.rotY += (e.clientX - lx) * 0.013;
+    lx = e.clientX;
+    draw3D();
+  });
+  window.addEventListener('mouseup', () => drag = false);
+  cv.addEventListener('wheel', e => {
+    e.preventDefault();
+    S.zoom = Math.max(0.3, Math.min(6, S.zoom - e.deltaY * 0.001));
+    draw3D();
+  }, {passive:false});
+  // Touch rotate
+  let tlx = 0;
+  cv.addEventListener('touchstart', e => { drag=true; tlx=e.touches[0].clientX; }, {passive:true});
+  cv.addEventListener('touchmove',  e => {
+    if (!drag) return;
+    S.rotY += (e.touches[0].clientX - tlx) * 0.013;
+    tlx = e.touches[0].clientX;
+    draw3D();
+  }, {passive:true});
+  cv.addEventListener('touchend', () => drag = false);
+}
+
+// ════════════════════════════════════════════════════════════════
+//  UI CONTROLS
+// ════════════════════════════════════════════════════════════════
+function setTool(t) {
+  S.tool = t;
+  document.querySelectorAll('.tbtn').forEach(b => b.classList.toggle('active', b.dataset.tool === t));
+  const cv = document.getElementById('ocv');
+  cv.style.cursor = t === 'fill' ? 'cell' : t === 'erase' ? 'not-allowed' : 'crosshair';
+}
+
+function setBrush(b) {
+  S.brush = b;
+  document.getElementById('bval').textContent = b;
+  document.getElementById('bsl').value = b;
+}
+
+function setMat(m) {
+  S.mat = m;
+  document.querySelectorAll('.mbtn').forEach(b => b.classList.toggle('active', +b.dataset.mat === m));
+}
+
+function setSlice(z) {
+  S.slice = Math.max(0, Math.min(S.RZ-1, +z));
+  document.getElementById('zsl').value    = S.slice;
+  document.getElementById('zval').textContent = `${S.slice} / ${S.RZ-1}`;
+  drawSlice(); draw3D();
+}
+function zStep(d) { setSlice(S.slice + d); }
+
+function newScene() {
+  const rx = Math.max(4, Math.min(128, +document.getElementById('rx').value || 32));
+  const ry = Math.max(4, Math.min(128, +document.getElementById('ry').value || 32));
+  const rz = Math.max(4, Math.min(128, +document.getElementById('rz').value || 32));
+  if (S.voxels && S.voxels.some(v => v !== 0)) {
+    if (!confirm('Clear current model and resize?')) return;
+  }
+  S.RX=rx; S.RY=ry; S.RZ=rz;
+  S.voxels = new Uint8Array(rx * ry * rz);
+  S.slice  = 0;
+  S.history = []; S.hIdx = -1;
+  document.getElementById('zsl').max = rz - 1;
+  document.getElementById('zsl').value = 0;
+  document.getElementById('zval').textContent = `0 / ${rz-1}`;
+  updUndo();
+  resizeCvs();
+  pushHist();
+  renderAll();
+}
+
+// ════════════════════════════════════════════════════════════════
+//  EXPORT / IMPORT  .soli
+// ════════════════════════════════════════════════════════════════
+function exportSoli() {
+  // Chunked base64 to avoid spread-into-string stack overflow on large arrays
+  let bin = '';
+  const chunk = 4096;
+  for (let i=0; i<S.voxels.length; i+=chunk)
+    bin += String.fromCharCode(...S.voxels.subarray(i, i+chunk));
+
+  const data = {
+    magic:   'SOLI',
+    version: '0.1',
+    resolution: { x:S.RX, y:S.RY, z:S.RZ },
+    materials:  MAT.map(m => ({ name:m.name, density:m.density, elasticity:m.elast, color:m.color })),
+    voxels:     btoa(bin),
+  };
+  const a = document.createElement('a');
+  a.href     = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {type:'application/octet-stream'}));
+  a.download = `soli-${Date.now()}.soli`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function importSoli() { document.getElementById('file-in').click(); }
+
+function loadSoli(e) {
+  const f = e.target.files[0];
+  if (!f) return;
+  const rd = new FileReader();
+  rd.onload = ev => {
+    try {
+      const d = JSON.parse(ev.target.result);
+      if (d.magic !== 'SOLI') { alert('Not a valid .soli file.'); return; }
+      S.RX=d.resolution.x; S.RY=d.resolution.y; S.RZ=d.resolution.z;
+      S.voxels = new Uint8Array(S.RX * S.RY * S.RZ);
+      const dec = atob(d.voxels);
+      for (let i=0; i<dec.length; i++) S.voxels[i] = dec.charCodeAt(i);
+      S.slice  = 0;
+      S.history = [S.voxels.slice()]; S.hIdx = 0;
+      document.getElementById('rx').value = S.RX;
+      document.getElementById('ry').value = S.RY;
+      document.getElementById('rz').value = S.RZ;
+      document.getElementById('zsl').max  = S.RZ-1;
+      document.getElementById('zsl').value = 0;
+      document.getElementById('zval').textContent = `0 / ${S.RZ-1}`;
+      updUndo(); resizeCvs(); renderAll();
+    } catch (err) { alert('Load failed: ' + err.message); }
+  };
+  rd.readAsText(f);
+  e.target.value = '';
+}
+
+// ════════════════════════════════════════════════════════════════
+//  CANVAS SIZING  (responsive)
+// ════════════════════════════════════════════════════════════════
+function resizeCvs() {
+  // Slice editor — square, fits the wrap container
+  const wrap = document.getElementById('swrap');
+  const W    = wrap.clientWidth  - 24;
+  const H    = wrap.clientHeight - 24;
+  const size = Math.max(64, Math.min(W, H, 680));
+  for (const id of ['scv', 'ocv']) {
+    const cv = document.getElementById(id);
+    cv.width  = size; cv.height = size;
+    cv.style.width  = size + 'px';
+    cv.style.height = size + 'px';
+  }
+  // Preview canvas — fills the preview panel
+  const pcv = document.getElementById('pcv');
+  pcv.width  = Math.max(64, pcv.offsetWidth  || 268);
+  pcv.height = Math.max(64, pcv.offsetHeight || 300);
+
+  drawSlice(); draw3D();
+}
+
+// ════════════════════════════════════════════════════════════════
+//  MATERIAL PALETTE  (built dynamically)
+// ════════════════════════════════════════════════════════════════
+function buildPalette() {
+  const list = document.getElementById('mlist');
+  MAT.slice(1).forEach((m, i) => {
+    const idx = i + 1;
+    const btn = document.createElement('button');
+    btn.className    = 'mbtn' + (idx === 1 ? ' active' : '');
+    btn.dataset.mat  = idx;
+    btn.onclick      = () => setMat(idx);
+    btn.innerHTML    =
+      `<div class="msw" style="background:${m.color}"></div>` +
+      `<div class="minfo">` +
+        `<div class="mname">${m.name}</div>` +
+        `<div class="mdens">${m.density} g/cm³</div>` +
+      `</div>`;
+    list.appendChild(btn);
+  });
+}
+
+// ════════════════════════════════════════════════════════════════
+//  KEYBOARD SHORTCUTS
+// ════════════════════════════════════════════════════════════════
+document.addEventListener('keydown', e => {
+  // Undo/redo — always intercept
+  if (e.ctrlKey || e.metaKey) {
+    if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return; }
+    if (e.key === 'z' &&  e.shiftKey) { e.preventDefault(); redo(); return; }
+    if (e.key === 'y')                { e.preventDefault(); redo(); return; }
+  }
+  // Skip shortcuts if typing in an input
+  if (e.target.tagName === 'INPUT') return;
+  const k = e.key;
+  if (k === '[') setBrush(Math.max(1,  S.brush - 1));
+  if (k === ']') setBrush(Math.min(16, S.brush + 1));
+  if (k === 'ArrowUp'   || k === '.') zStep(1);
+  if (k === 'ArrowDown' || k === ',') zStep(-1);
+  // Tool shortcuts
+  const tools = { d:'draw', e:'erase', r:'rect', c:'circle', l:'line', f:'fill' };
+  if (tools[k]) setTool(tools[k]);
+});
+
+// ════════════════════════════════════════════════════════════════
+//  INIT
+// ════════════════════════════════════════════════════════════════
+function init() {
+  buildPalette();
+  pushHist();           // initial empty state in history
+  bindSlice();
+  initPreview();
+
+  // Responsive resize
+  const ro = new ResizeObserver(resizeCvs);
+  ro.observe(document.getElementById('swrap'));
+  ro.observe(document.getElementById('preview'));
+
+  resizeCvs();
+  renderAll();
+}
+
+init();
+</script>
+</body>
+</html>
