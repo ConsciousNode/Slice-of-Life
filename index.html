@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Slice of Life — ConsciousNode SoftWorks</title>
+<style>
+:root {
+  --bg:#0b0a0f; --bg2:#131120; --border:#2a2640;
+  --amber:#c89b4a; --adim:#6a5220; --aglow:rgba(200,155,74,.08);
+  --teal:#4ab8c8; --text:#e4dff0; --muted:#7a7498;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{
+  min-height:100dvh;background:var(--bg);color:var(--text);
+  font-family:var(--mono);display:flex;align-items:center;justify-content:center;
+}
+main{
+  max-width:480px;width:100%;padding:48px 32px;
+  display:flex;flex-direction:column;gap:32px;
+}
+.wordmark{
+  display:flex;flex-direction:column;gap:4px;
+}
+.title{
+  font-size:28px;font-weight:800;color:var(--amber);
+  letter-spacing:-.5px;line-height:1;
+}
+.sub{
+  font-size:11px;color:var(--muted);letter-spacing:.08em;
+}
+.desc{
+  font-size:13px;line-height:1.7;color:var(--text);
+  border-left:2px solid var(--border);padding-left:16px;
+}
+.desc em{color:var(--teal);font-style:normal;}
+.launch{
+  display:block;padding:14px 24px;
+  background:var(--aglow);border:1px solid var(--adim);
+  color:var(--amber);font-family:var(--mono);font-size:13px;
+  font-weight:700;letter-spacing:.08em;text-decoration:none;
+  text-align:center;transition:border-color .15s,background .15s;
+}
+.launch:hover{border-color:var(--amber);background:rgba(200,155,74,.14);}
+.meta{
+  display:flex;flex-direction:column;gap:6px;
+  font-size:10px;color:var(--muted);
+}
+.meta a{color:var(--muted);text-decoration:none;transition:color .15s;}
+.meta a:hover{color:var(--teal);}
+.meta .row{display:flex;gap:16px;flex-wrap:wrap;}
+.tag{
+  display:inline-block;padding:1px 6px;
+  border:1px solid var(--border);font-size:9px;
+  color:var(--muted);letter-spacing:.06em;
+}
+</style>
+</head>
+<body>
+<main>
+  <div class="wordmark">
+    <div class="title">Slice of Life</div>
+    <div class="sub">ConsciousNode SoftWorks · v0.2</div>
+  </div>
+
+  <p class="desc">
+    Volumetric voxel modeler. <em>No wireframes. No polygons.</em>
+    Build 3D models slice by slice — the way a 3D printer builds.
+    Physics-native geometry: the model is its own physics object
+    because it has actual interior structure.
+  </p>
+
+  <a class="launch" href="./slice-of-life-v0.2.html">LAUNCH →</a>
+
+  <div class="meta">
+    <div class="row">
+      <span class="tag">SINGLE FILE</span>
+      <span class="tag">ZERO DEPENDENCIES</span>
+      <span class="tag">OFFLINE FIRST</span>
+      <span class="tag">MIT LICENSE</span>
+    </div>
+    <div class="row">
+      <a href="./slice-of-life-v0.1.html">v0.1</a>
+      <a href="https://github.com/ConsciousNode/Slice-of-Life">GitHub</a>
+      <a href="https://github.com/ConsciousNode/Slice-of-Life/blob/main/CHANGELOG.md">Changelog</a>
+      <a href="https://github.com/ConsciousNode/Slice-of-Life/blob/main/GOALS.md">Goals</a>
+    </div>
+    <div>Kham Kizer · Kehai Interim · 2026</div>
+  </div>
+</main>
+</body>
+</html>
