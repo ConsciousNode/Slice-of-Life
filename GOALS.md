@@ -7,65 +7,58 @@ These are intentions, not promises. The constraint is the source of the inventio
 
 ## v0.3
 
-### Multi-axis 3D preview rotation
-Currently the preview rotates only on the Y axis (horizontal drag). Adding X-axis rotation (vertical drag) makes it possible to view models from below, above, or any elevation — important for building bottom-up or inspecting underside geometry.
+**Slice copy / paste**  
+Copy the current Z slice and paste it to another Z position. Useful for extruding consistent cross-sections without redrawing each one.
 
-The camera becomes a full spherical coordinate system:
-```
-camFrom = normalize(sin(rotY)*cos(rotX), sin(rotX), cos(rotY)*cos(rotX))
-```
+**Configurable grid reference overlay**  
+Optional lines in the slice editor at configurable intervals (e.g., every 8 voxels) to aid symmetry and alignment.
 
-Clamp `rotX` to `[-π/2, π/2]` to prevent gimbal flip.
+**Keyboard material selection**  
+Number keys `1`–`8` to select materials directly.
 
-### Slice copy/paste
-Copy the current Z slice and paste it to another Z position. Useful for building consistent cross-sections across a long extrusion without redrawing.
-
-### Configurable grid reference
-Optional overlay lines in the slice editor at configurable intervals (e.g., every 8 voxels) to help with symmetry and alignment.
-
-### Additional keyboard shortcuts
-- Number keys `1`–`8` to select materials directly
-- `g` for ellipse (frees `e` for erase consistency)
+**Import centering awareness**  
+When loading a `.soli` that contains a `center_offset`, offer to reverse the offset so the model appears in its original authored position in the editor.
 
 ---
 
 ## v0.4
 
-### Physics preview tab
-A second tab in the 3D preview panel alongside the current view tab. Clicking SIMULATE drops the model under gravity and shows it settle on a floor plane.
+**Bounding-box crop on export**  
+Option to trim the exported grid to the tight bounding box of non-empty voxels, reducing file size for sparse models. Grid dimensions in the `.soli` shrink to fit.
 
-**Layer 1 (v0.4):** Treat the whole model as a single rigid body. Compute center of mass from voxel densities. Apply gravity. Elastic bounce on floor contact using the average surface elasticity. The density system already carries everything needed — a metal-heavy model hits differently than a gas-heavy one.
-
-**Layer 2 (v0.5):** Connected-component flood fill finds separate rigid bodies. Parts fall independently. Face-adjacent voxels are bonded; bond strength = min(elasticity of both materials). Exceeding yield strength snaps the bond → fracture.
-
-**Layer 3 (v0.6+):** Per-material behavior. Liquid voxels become particles. Soft/tissue voxels deform. Gas voxels provide buoyancy. A heart pumps because it has the right chamber geometry and elasticity profile — not because it was programmed to.
-
-### Larger resolution support
-Efficient rendering for grids up to 256³. The DDA ray caster scales well; the bottleneck will be texture upload and JavaScript-side surface enumeration (ISO fallback).
+**Larger resolution support**  
+Efficient rendering for grids up to 256³. The DDA ray caster scales well; the bottleneck is texture upload size and JavaScript-side surface enumeration in the ISO fallback.
 
 ---
 
-## Long-term
+## Physics — not Slice of Life's problem
 
-### Ecosystem integration
-Slice of Life is the authoring tool in a larger pipeline:
+Physics preview was considered for v0.3 but removed from scope. It belongs in SliceWorks Engine, which has the full physics simulation stack specified and in progress. If a quick preview is ever wanted in the modeler, it can bridge into SliceWorks at that point with full information. Right tool, right place.
+
+---
+
+## The Slice Suite
+
+Slice of Life is the authoring tool in a growing pipeline:
 
 ```
-Slice of Life  →  .soli  →  Slice Studio  →  .sost  →  SliceWorks Engine
-  (modeler)                  (composer)                   (runtime)
+Slice of Life    → .soli  →  voxel modeler          Kehai Interim   ✓ v0.2
+Slice Studio     → .sost  →  scene composer          Komo Interim    ✓ v0.2
+Slice and Dice   → .soan  →  animation studio        Vael Interim    ⚡ speccing
+SliceWorks       → .soga  →  game engine / runtime   Ed Interim      ⚡ specced
 ```
 
-The `.soli` format is designed to carry everything a physics engine needs without additional authoring. The goal is that you model the object, and the engine knows how it behaves because you built it with interior geometry and real material densities.
+The format family: `.soli` `.sost` `.soan` `.soga`
 
-### `.soli` format versioning
-The format is currently v0.1. Future versions may add:
-- Named voxel regions (for animation rigging, physics joint hints)
-- Level-of-detail hints
-- Embedded thumbnail (base64 PNG of the 3D preview at export time)
-- Compression (the voxel array is highly compressible; ANS coding is already in the ConsciousNode toolchain via FPSS)
+Models flow: authored in Slice of Life → composed in Slice Studio → animated in Slice and Dice → run in SliceWorks. Each format carries everything the next tool needs. No additional authoring required at handoff.
 
-### What we are not building
-- A polygon modeler. If you need polygons, Blender exists.
+The `.soli` format already carries material densities and elasticities. When SliceWorks reads a model, it knows how it behaves physically because you built it with interior geometry and real material properties. The physics is in the model, not in a separate rig.
+
+---
+
+## What we are not building
+
+- A polygon modeler. Blender exists.
 - A dependency on any external library or runtime.
 - Anything that requires a server to function.
 - Anything that doesn't fit in a single HTML file.
