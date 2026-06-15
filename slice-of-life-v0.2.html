@@ -82,8 +82,8 @@ header {
 .hbtn:hover    { border-color:var(--amber); color:var(--amber); }
 .hbtn.pri      { background:var(--aglow); border-color:var(--adim); color:var(--amber); }
 .hbtn.pri:hover{ border-color:var(--amber); }
-.hbtn:disabled { opacity:.3; cursor:not-allowed; }
-.hbtn:disabled:hover { border-color:var(--border); color:var(--muted); }
+.hbtn.resize { border-color:var(--tdim); color:var(--teal); }
+.hbtn.resize:hover { border-color:var(--teal); color:var(--teal); background:var(--tglow); }
 /* model name input */
 .name-in {
   background:var(--bg3); border:1px solid var(--border);
@@ -238,6 +238,7 @@ input[type=range]::-webkit-slider-thumb {
       <span class="rl">Y</span><input type="number" class="ri" id="ry" value="32" min="4" max="128">
       <span class="rl">Z</span><input type="number" class="ri" id="rz" value="32" min="4" max="128">
       <button class="hbtn" onclick="newScene()">NEW</button>
+      <button class="hbtn resize" onclick="resizeScene()" title="Resample model to new resolution — geometry scales with it">RESIZE</button>
     </div>
     <div class="h-sep"></div>
     <button class="hbtn" id="btn-undo" onclick="undo()" disabled>↩ UNDO</button>
@@ -291,6 +292,7 @@ input[type=range]::-webkit-slider-thumb {
         </div>
         <button class="nbtn" onclick="zStep(1)">▶</button>
         <span class="zval" id="zval">0 / 31</span>
+        <button class="nbtn" onclick="extendZ()" title="Add 8 more Z slices (max 128)">+8Z</button>
       </div>
       <div id="swrap">
         <canvas id="scv"></canvas>
@@ -899,11 +901,45 @@ function setMat(m){
 }
 function setSlice(z){
   S.slice=Math.max(0,Math.min(S.RZ-1,+z));
+  _syncZUI(); drawSlice(); draw3D(); drawZMap();
+}
+function resizeScene(){
+  const rx=Math.max(4,Math.min(128,+document.getElementById('rx').value||32));
+  const ry=Math.max(4,Math.min(128,+document.getElementById('ry').value||32));
+  const rz=Math.max(4,Math.min(128,+document.getElementById('rz').value||32));
+  const down=rx<S.RX||ry<S.RY||rz<S.RZ;
+  const msg=`Resample ${S.RX}×${S.RY}×${S.RZ} → ${rx}×${ry}×${rz}?`+
+    (down?'\n\nDownsampling will lose detail.':'\n\nYour geometry will scale up with the grid.');
+  if (!confirm(msg)) return;
+  // Nearest-neighbor resample
+  const nv=new Uint8Array(rx*ry*rz);
+  for (let nz=0;nz<rz;nz++) for (let ny=0;ny<ry;ny++) for (let nx=0;nx<rx;nx++){
+    const ox=Math.min(S.RX-1,Math.floor(nx*S.RX/rx));
+    const oy=Math.min(S.RY-1,Math.floor(ny*S.RY/ry));
+    const oz=Math.min(S.RZ-1,Math.floor(nz*S.RZ/rz));
+    nv[nz*rx*ry+ny*rx+nx]=getV(ox,oy,oz);
+  }
+  S.RX=rx;S.RY=ry;S.RZ=rz;S.voxels=nv;
+  S.slice=Math.min(S.slice,rz-1);
+  S.history=[nv.slice()];S.hIdx=0;
+  _syncZUI(); updUndo(); resizeCvs(); renderAll();
+}
+
+function extendZ(extra=8){
+  const newRZ=S.RZ+extra;
+  if (newRZ>128){alert('Maximum Z resolution is 128.');return;}
+  const nv=new Uint8Array(S.RX*S.RY*newRZ);
+  nv.set(S.voxels); // existing slices preserved at their Z positions
+  S.RZ=newRZ; S.voxels=nv;
+  document.getElementById('rz').value=newRZ;
+  _syncZUI(); pushHist(); resizeCvs(); renderAll();
+}
+
+function _syncZUI(){
+  document.getElementById('zsl').max=S.RZ-1;
   document.getElementById('zsl').value=S.slice;
   document.getElementById('zval').textContent=`${S.slice} / ${S.RZ-1}`;
-  drawSlice(); draw3D(); drawZMap();
 }
-function zStep(d){setSlice(S.slice+d);}
 
 function newScene(){
   const rx=Math.max(4,Math.min(128,+document.getElementById('rx').value||32));
