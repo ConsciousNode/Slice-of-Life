@@ -342,6 +342,7 @@ const S = {
   history:[], hIdx:-1, MAX_HIST:50,
   painting:false, shapeStart:null, lastPt:null,
   rotY: Math.PI / 5,
+  rotX: Math.PI / 8,  // slight downward tilt default
   zoom: 1.0,
   name: '',
 };
@@ -592,7 +593,8 @@ precision highp sampler3D;
 
 uniform sampler3D u_tex;   // voxel grid: R8, material index 0-8
 uniform vec3  u_res;       // grid dimensions
-uniform float u_rotY;      // camera Y rotation
+uniform float u_rotY;
+uniform float u_rotX;      // elevation angle, clamped ±π/2      // camera Y rotation
 uniform float u_zoom;      // zoom
 uniform vec2  u_size;      // canvas pixel size
 uniform vec3  u_mats[8];   // material colors, index 1-8 → u_mats[0-7]
@@ -607,12 +609,13 @@ void main(){
   vec2 uv = (gl_FragCoord.xy / u_size - 0.5);
   uv.x   *= u_size.x / u_size.y;
 
-  // Camera basis (Y-axis rotation)
+  // Camera basis — full spherical coordinate camera
   float cY=cos(u_rotY), sY=sin(u_rotY);
-  vec3 camFrom = normalize(vec3(sY,0.6,cY));      // direction: scene → camera
-  vec3 camDir  = -camFrom;                         // direction: camera → scene (= rayDir)
-  vec3 right   = vec3(cY,0.0,-sY);                // horizontal basis
-  vec3 up      = normalize(cross(right,camDir));   // vertical basis (up.y > 0) ✓
+  float cX=cos(u_rotX), sX=sin(u_rotX);
+  vec3 camFrom = normalize(vec3(sY*cX, sX, cY*cX)); // direction: scene → camera
+  vec3 camDir  = -camFrom;                            // direction: camera → scene
+  vec3 right   = vec3(cY, 0.0, -sY);                 // horizontal basis (Y-rotation only)
+  vec3 up      = normalize(cross(right, camDir));     // vertical basis ✓
 
   // Orthographic ray
   // Scale: compute the extent of the grid projected onto right and up,
@@ -726,7 +729,7 @@ function initGL(){
 
   // Cache uniform locations
   gl.useProgram(glProg);
-  for (const n of ['u_tex','u_res','u_rotY','u_zoom','u_size','u_mats[0]'])
+  for (const n of ['u_tex','u_res','u_rotY','u_rotX','u_zoom','u_size','u_mats[0]'])
     glUni[n]=gl.getUniformLocation(glProg,n);
 
   uploadVoxTex();
@@ -755,6 +758,7 @@ function _do3D_gl(){
   gl.uniform1i(glUni['u_tex'],0);
   gl.uniform3f(glUni['u_res'],S.RX,S.RY,S.RZ);
   gl.uniform1f(glUni['u_rotY'],S.rotY);
+  gl.uniform1f(glUni['u_rotX'],S.rotX);
   gl.uniform1f(glUni['u_zoom'],S.zoom);
   gl.uniform2f(glUni['u_size'],W,H);
   gl.uniform1f(glUni['u_slice'],S.slice);
@@ -833,23 +837,28 @@ function renderAll(){drawSlice(); draw3D(); drawZMap();}
 // ════════════════════════════════════════════════════════════════
 function initPreview(){
   const cv=document.getElementById('pcv');
-  let drag=false, lx=0;
-  cv.addEventListener('mousedown',e=>{drag=true;lx=e.clientX;});
+  let drag=false, lx=0, ly=0;
+  cv.addEventListener('mousedown',e=>{drag=true;lx=e.clientX;ly=e.clientY;});
   window.addEventListener('mousemove',e=>{
     if (!drag) return;
-    S.rotY+=(e.clientX-lx)*0.013; lx=e.clientX; draw3D();
+    S.rotY+=(e.clientX-lx)*0.013; lx=e.clientX;
+    S.rotX=Math.max(-Math.PI/2+0.05,Math.min(Math.PI/2-0.05,S.rotX-(e.clientY-ly)*0.013));
+    ly=e.clientY;
+    draw3D();
   });
   window.addEventListener('mouseup',()=>drag=false);
   cv.addEventListener('wheel',e=>{
     e.preventDefault();
     S.zoom=Math.max(0.3,Math.min(6,S.zoom-e.deltaY*0.001)); draw3D();
   },{passive:false});
-  let tlx=0;
-  cv.addEventListener('touchstart',e=>{drag=true;tlx=e.touches[0].clientX;},{passive:true});
+  let tlx=0, tly=0;
+  cv.addEventListener('touchstart',e=>{drag=true;tlx=e.touches[0].clientX;tly=e.touches[0].clientY;},{passive:true});
   cv.addEventListener('touchmove',e=>{
     if (!drag) return;
-    S.rotY+=(e.touches[0].clientX-tlx)*0.013;
-    tlx=e.touches[0].clientX; draw3D();
+    S.rotY+=(e.touches[0].clientX-tlx)*0.013; tlx=e.touches[0].clientX;
+    S.rotX=Math.max(-Math.PI/2+0.05,Math.min(Math.PI/2-0.05,S.rotX-(e.touches[0].clientY-tly)*0.013));
+    tly=e.touches[0].clientY;
+    draw3D();
   },{passive:true});
   cv.addEventListener('touchend',()=>drag=false);
 }
