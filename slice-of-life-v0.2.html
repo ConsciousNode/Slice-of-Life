@@ -1017,13 +1017,38 @@ function exportSoli(){
   const raw  = document.getElementById('model-name').value.trim();
   const name = raw || 'untitled';
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+
+  // Compute center of mass (density-weighted) and shift to grid center on export
+  let totalMass=0, comX=0, comY=0, comZ=0;
+  for (let z=0;z<S.RZ;z++) for (let y=0;y<S.RY;y++) for (let x=0;x<S.RX;x++){
+    const m=getV(x,y,z); if (!m) continue;
+    const d=MAT[m].density||1;
+    totalMass+=d; comX+=x*d; comY+=y*d; comZ+=z*d;
+  }
+  let exportVox=S.voxels, offsetX=0, offsetY=0, offsetZ=0;
+  if (totalMass>0){
+    offsetX=Math.round(S.RX/2-comX/totalMass);
+    offsetY=Math.round(S.RY/2-comY/totalMass);
+    offsetZ=Math.round(S.RZ/2-comZ/totalMass);
+    if (offsetX!==0||offsetY!==0||offsetZ!==0){
+      const nv=new Uint8Array(S.RX*S.RY*S.RZ);
+      for (let z=0;z<S.RZ;z++) for (let y=0;y<S.RY;y++) for (let x=0;x<S.RX;x++){
+        const m=getV(x,y,z); if (!m) continue;
+        const nx=x+offsetX, ny=y+offsetY, nz=z+offsetZ;
+        if (inB(nx,ny,nz)) nv[VI(nx,ny,nz)]=m;
+      }
+      exportVox=nv;
+    }
+  }
+
   let bin=''; const chunk=4096;
-  for (let i=0;i<S.voxels.length;i+=chunk)
-    bin+=String.fromCharCode(...S.voxels.subarray(i,i+chunk));
+  for (let i=0;i<exportVox.length;i+=chunk)
+    bin+=String.fromCharCode(...exportVox.subarray(i,i+chunk));
   const data={
     magic:'SOLI', version:'0.1',
     name,
     resolution:{x:S.RX,y:S.RY,z:S.RZ},
+    center_offset:{x:offsetX,y:offsetY,z:offsetZ},
     materials:MAT.map(m=>({name:m.name,density:m.density,elasticity:m.elast,color:m.color})),
     voxels:btoa(bin),
   };
