@@ -44,9 +44,9 @@ Slice of Life is the authoring tool in a growing pipeline:
 ```
 Slice of Life    → .soli  →  voxel modeler          Kehai Interim   ✓ v0.3
 Slice Studio     → .sost  →  scene composer          Komo Interim    ✓ v0.3
-Slice and Dice   → .soan  →  animation studio        Vael Interim    ✓ v0.3
-SliceWorks       → .soga  →  game engine / runtime   Ed Interim      ✓ v0.4
-(future)         → .soga  →  standalone player: the console
+Slice and Dice   → .soan  →  animation studio        Vael Interim    ✓ v0.4
+SliceWorks       → .soga  →  game engine / runtime   Ed Interim      ✓ v0.5
+SliceWorks Player → cartridge (.html) → the console           ✓ v0.1
 ```
 
 The format family: `.soli` `.sost` `.soan` `.soga`
@@ -57,11 +57,15 @@ The `.soli` format already carries material densities and elasticities. When Sli
 
 ---
 
-## Next for the physics (from the 2026-10-12 review)
+## Next for the physics and the console
 
-- **Body–body contact physics.** Bodies still collide as axis-aligned boxes; the floor solver's corner impulses should be extended to body pairs, so dice clatter off each other with spin.
-- **Hinge limits** (`limit_deg`): orientation is now a matrix, so tracking each body relative to the joint's bind pose is possible.
-- **Engine `.soan` import**, so parametric animations from Dice replay in the Engine (they will match: same core).
+Done on 2026-10-12: body–body contacts, hinge limits, `.soan` and `.soga` import, terrain collision, the Player and cartridges.
+
+- **Input for cartridges**, so they can be games: keys and pointer bound to forces, impulses or triggers on named bodies. `.soga` already has an empty `triggers` list waiting.
+- **Studio rooms as geometry** (walls and floor presets as static bodies, like terrain).
+- **Soft bodies in contacts**: soft clusters collide with the floor only.
+- **Ball and fixed joints** with proper rotational constraints (fixed is still an Euler-angle pull toward parity).
+- **Warm starting** with split-impulse position correction, for taller stacks.
 
 ---
 

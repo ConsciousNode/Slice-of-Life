@@ -13,41 +13,50 @@ Every tool is a single HTML file. No install, no server, no dependencies, works 
 ## The pipeline
 
 ```
-Slice of Life  →  Slice Studio  →  Slice and Dice  →  SliceWorks Engine  →  (future) the console
-    .soli            .sost             .soan               .soga
-    model            scene             animation           game / runtime
+Slice of Life  →  Slice Studio  →  Slice and Dice  →  SliceWorks Engine  →  SliceWorks Player
+    .soli            .sost             .soan               .soga                cartridge (.html)
+    model            scene             animation           game / runtime       the console
 ```
 
 | Tool | File | What it does | Lead |
 |---|---|---|---|
 | **Slice of Life** | `slice-of-life-v0.3.html` | Volumetric modeler. Build slice by slice like a 3D printer, with real materials and authored joints (fixed, hinge, ball). WebGL2 ray-cast preview. | Kehai Interim |
 | **Slice Studio** | `slice-studio-v0.3.html` | Scene composer. Place models, draw terrain, room presets, free-fly camera. | Komorebi |
-| **Slice and Dice** | `slice-and-dice-v0.3.html` | Animation studio. Set a throw (position, spin, velocity), preview it with the Engine's own physics, export `.soan` (parametric or baked). | Vael Interim |
-| **SliceWorks Engine** | `sliceworks-engine-v0.4.html` | Physics and runtime. Rigid bodies with contact physics, soft bodies, gas, fracture, joints. Exports `.soga`. | Ed Interim |
+| **Slice and Dice** | `slice-and-dice-v0.4.html` | Animation studio. Set a throw (position, spin, velocity), preview it with the Engine's own physics, export `.soan` (parametric or baked). | Vael Interim |
+| **SliceWorks Engine** | `sliceworks-engine-v0.5.html` | Physics and runtime. Rigid bodies with voxel contact physics, soft bodies, gas, fracture, joints with limits, terrain. Loads `.soli`, `.sost`, `.soan`, `.soga`; exports `.soga` and cartridges. | Ed Interim |
+| **SliceWorks Player** | `sliceworks-player-v0.1.html` | The console. Plays a `.soga`, or boots straight into a cartridge. Try [`cartridges/two-dice.html`](cartridges/two-dice.html). | — |
 
 Older versions stay in the repo next to the current ones.
 
 ## The goal
 
-A fifth platform: a standalone player that loads a `.soga` file the way a console loads a cartridge. The whole engine in one HTML file, the scene pre-baked. The `.soga` is the ROM, the HTML is the console. Model it, stage it, throw it, ship it, all in a browser.
+A fifth platform: a console. **It exists now, as v0.1.** The Engine can export a *cartridge*: one HTML file holding the whole engine plus your scene, which boots straight into it with nothing but PLAY, RESET and the camera. The `.soga` is the ROM; the HTML is the console. Model it, stage it, throw it, ship it, all in a browser. Next: input, so cartridges can be games and not only scenes.
 
 ## What's new (2026-10-12)
 
-**The dice land on a face now.** In Engine v0.3.2, 0 of 16 dropped dice came to rest flat; they froze tilted on edges and corners, because nothing turned a collision into torque. Engine v0.4 adds real contact physics: rotation matrices, a full inertia tensor per body, and impulses at the touching voxel corners with restitution and friction from the material tables. A die on its edge now tips onto a face by itself, and which face comes up is decided by the physics. In a 60-die test all six faces turned up.
+**Morning: the dice land on a face.** Engine v0.4 added real floor contact physics (rotation matrices, inertia tensors, impulses at the touching voxel corners). Dropped dice went from 0/16 landing flat to 16/16.
 
-**One physics core.** Slice and Dice used to run its own physics (spheres, gravity about 10× weaker, different units), so a throw authored there played out differently in the Engine. Dice v0.3 runs the Engine's core, and the same throw ends in the same place to within 10⁻¹² voxels.
+**Then the rest of the pipeline:**
+- **Engine v0.5: bodies hit each other properly.** Voxel-accurate body–body contacts: dice clatter and spin off each other, stack (a die stays on another up to ~2.5 voxels of overhang), and conserve momentum. All contacts are solved together, with 4-point contact manifolds.
+- **One placement convention for all tools.** Studio scenes now load into the Engine exactly as authored (they used to arrive shifted and lifted 35 voxels up), and rotated multi-body models stay in one piece.
+- **Studio terrain is solid ground** (static stone), in the Engine and in Dice.
+- **The Engine loads `.soan` and `.soga`.** A parametric `.soan` from Dice replays to *exactly* Dice's result (bit for bit, through the files); a baked one plays back as recorded; a `.soga` resumes a saved game bit for bit.
+- **Hinge limits** (`limit_deg`) are enforced, measured from the authored pose, and hinge axes follow the model when it's rotated.
+- **SliceWorks Player v0.1 and cartridges.** See above.
 
-Details in [CHANGELOG.md](CHANGELOG.md).
+Formats and conventions: [docs/formats.md](docs/formats.md). Details in [CHANGELOG.md](CHANGELOG.md).
 
 ## Tests
 
 ```bash
 npm i playwright        # once
-node tests/physics.mjs  # dice land flat · edge tipping · Dice and Engine agree
+node tests/physics.mjs   # dice land flat · tipping · stacking · momentum · hinge limits · Dice = Engine
+node tests/pipeline.mjs  # .sost + terrain · .soan (parametric, baked) · .soga resume · cartridges
 ```
 
 ## Docs
 
+- [Formats, units and the placement convention](docs/formats.md)
 - [Slice of Life user guide and `.soli` format](docs/slice-of-life.md)
 - [SliceWorks Engine spec v0.1](docs/sliceworks-engine-spec-v0.1.md)
 - [Slice and Dice spec v0.1](docs/slice-and-dice-spec-v0.1.md)
@@ -57,7 +66,7 @@ node tests/physics.mjs  # dice land flat · edge tipping · Dice and Engine agre
 ## Credits
 
 **Kham** (Khamerron Ramsey Kizer): concept, vision, direction
-**Kehai Interim**: Slice of Life, voxel format and renderer; Engine v0.4 contact physics; Dice v0.3 core
+**Kehai Interim**: Slice of Life, voxel format and renderer; Engine v0.4–v0.5 contact physics, imports, cartridges and the Player; Dice v0.3–v0.4 core
 **Komorebi**: Slice Studio, `.sost` format; Engine bug-fix pass
 **Vael Interim**: Slice and Dice
 **Ed Interim**: SliceWorks Engine

@@ -4,6 +4,32 @@ All notable changes to the Slice Suite. Before 2026-10-12 this repo held Slice o
 
 ---
 
+## 2026-10-12 (later) · Engine v0.5, Dice v0.4, Player v0.1 · Kehai Interim
+
+### SliceWorks Engine v0.5
+- **Body–body contacts.** Every outer voxel corner of one body is tested against the other body's actual voxels (not boxes). Depth and normal come from the shortest way out of the solid; corners on edges and vertices, which are about equally close to 2–3 faces, take the face that agrees with the unambiguous contacts; corners are inset by 0.004 so an outline-aligned corner counts the same on every side. Bodies joined by an attachment point don't collide with each other.
+- **Contacts solved together.** Floor and body–body contacts go into one solve (16 sweeps). Each contact patch is reduced to a 4-point manifold (deepest, farthest, largest area): the same support polygon, much less rocking. A body standing on the floor isn't pushed into it by the one above. Bodies sleep on any stable support. (Warm starting was tried and made stacks bounce with this solver; it's off, bookkeeping kept.)
+- **Placement convention** shared with Studio and Dice: instance position = the model's bottom-centre pivot; one transform places every body of an instance. Studio scenes load as authored (no more +35 lift); rotated multi-body models no longer come apart.
+- **Terrain** from `.sost` is a static stone body (new material 14 `stone`). Static bodies are supported generally.
+- **Loads `.soan`** (parametric: re-simulated; baked: played back) and **`.soga` v0.3** (writes it too: instances, environment, floor, exact orientation matrices and sleep counters, so a saved game resumes bit for bit). Gravity and floor height can come from the file.
+- **Hinge limits** (`limit_deg`) enforced from the bind pose, splitting the correction by inertia; hinge axes are now turned with the model (v0.4 used them as world axes).
+- **Cartridges.** EXPORT CARTRIDGE writes one HTML file: the engine's own page plus the `.soga`, booting into player mode. Body properties are summed in grid-scan order so every tool computes bit-identical mass, centre of mass and inertia.
+- Dice demo throws the dice into each other. Old AABB pair resolver removed.
+
+Measured: 16/16 dropped dice land flat; a die stays stacked up to ~2.5 voxels of overhang (falls at 2.8; tips at 3.0 in principle); head-on hits conserve momentum exactly; a ±30° hinge on a rotated model stops at 30.0°; 0.13 ms per tick for two dice, 0.8 ms for two 24³ blocks.
+
+### Slice and Dice v0.4
+- Synced to the Engine v0.5 core (copied verbatim) including body–body contacts, stone and terrain. Same throw, same result as the Engine to 4·10⁻¹⁶ voxels, collisions included; through a `.soan` file the Engine reproduces Dice's bake exactly.
+
+### SliceWorks Player v0.1
+- The blank console (`sliceworks-player-v0.1.html`, built by `tools/build-player.mjs`): plays a `.soga`. First cartridge: `cartridges/two-dice.html`.
+
+### Docs and tests
+- `docs/formats.md`: placement, units, `.soan` v0.4, `.soga` v0.3, cartridges.
+- `tests/physics.mjs` (9 checks) and `tests/pipeline.mjs` (8 checks), all passing.
+
+---
+
 ## 2026-10-12 · Suite home · Kehai Interim
 
 This repo is now the home of the whole Slice Suite: Slice of Life v0.3, Slice Studio v0.3, Slice and Dice v0.2 → v0.3 and SliceWorks Engine v0.3.2 → v0.4, plus the specs and handoff notes in `docs/`. `index.html` is a launcher for all four.
