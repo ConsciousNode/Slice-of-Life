@@ -4,6 +4,24 @@ All notable changes to the Slice Suite. Before 2026-10-12 this repo held Slice o
 
 ---
 
+## 2026-10-12 (late) · Engine v0.6, Player v0.2 · Kehai Interim
+
+### SliceWorks Engine v0.6: the cartridge buttons
+- **Roll** (Space, or a tap on empty canvas in the player): every dynamic body is picked up into a uniformly random orientation, lifted clear of the floor and the others, and tossed with random spin. Without the random orientation the result remembered the starting face (from the demo start, chi² 52–69 over 1000 dice; the up face came up ~22%). With it: chi² 1.15 over 1000 dice from the demo start, 3.50 over 1000 re-rolls from where they landed (df 5; p<0.05 needs 11.07).
+- **Flick**: drag a body to throw it in the camera's own plane, with an aim line while dragging; the throw gets a little lift and spin perpendicular to it. Drag on empty space still orbits.
+- **Readout**: when everything is at rest, the pips facing up are counted (enclosed holes on the top layer) and shown in a HUD, one die glyph per die plus the sum. **R** resets.
+- Controls are saved in the `.soga` (`controls: { roll, flick, readout }`) and set on the EXPORT tab, so each cartridge chooses what its player can do.
+- Demo die is now 7×7×7 with the standard pip layout (opposite faces sum to 7); the 6×6×6 die's six had touching pips.
+- Contact core unchanged from v0.5 (Dice v0.4 still matches it bit for bit).
+
+### SliceWorks Player v0.2 and the Two Dice cartridge
+- Rebuilt from Engine v0.6. `cartridges/two-dice.html` now rolls, flicks and reads.
+
+### Tests
+- `tests/controls.mjs` (10 checks): pip readout 600/600, fair rolls (fresh and re-rolled), Space, HUD, flick, cartridge controls, tap to roll. Physics and pipeline suites now run against v0.6; all pass.
+
+---
+
 ## 2026-10-12 (later) · Engine v0.5, Dice v0.4, Player v0.1 · Kehai Interim
 
 ### SliceWorks Engine v0.5

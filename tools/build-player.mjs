@@ -1,6 +1,6 @@
 // Builds the blank console (sliceworks-player-*.html) from the engine:
 // the same page, booted in player mode with no cartridge inside.
-//   node tools/build-player.mjs sliceworks-engine-v0.5.html sliceworks-player-v0.1.html
+//   node tools/build-player.mjs sliceworks-engine-v0.6.html sliceworks-player-v0.2.html
 import { readFileSync, writeFileSync } from 'node:fs';
 const [src, out] = process.argv.slice(2);
 if (!src || !out) { console.error('usage: node tools/build-player.mjs <engine.html> <player.html>'); process.exit(1); }

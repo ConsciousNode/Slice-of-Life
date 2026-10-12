@@ -23,14 +23,14 @@ Slice of Life  →  Slice Studio  →  Slice and Dice  →  SliceWorks Engine  �
 | **Slice of Life** | `slice-of-life-v0.3.html` | Volumetric modeler. Build slice by slice like a 3D printer, with real materials and authored joints (fixed, hinge, ball). WebGL2 ray-cast preview. | Kehai Interim |
 | **Slice Studio** | `slice-studio-v0.3.html` | Scene composer. Place models, draw terrain, room presets, free-fly camera. | Komorebi |
 | **Slice and Dice** | `slice-and-dice-v0.4.html` | Animation studio. Set a throw (position, spin, velocity), preview it with the Engine's own physics, export `.soan` (parametric or baked). | Vael Interim |
-| **SliceWorks Engine** | `sliceworks-engine-v0.5.html` | Physics and runtime. Rigid bodies with voxel contact physics, soft bodies, gas, fracture, joints with limits, terrain. Loads `.soli`, `.sost`, `.soan`, `.soga`; exports `.soga` and cartridges. | Ed Interim |
-| **SliceWorks Player** | `sliceworks-player-v0.1.html` | The console. Plays a `.soga`, or boots straight into a cartridge. Try [`cartridges/two-dice.html`](cartridges/two-dice.html). | — |
+| **SliceWorks Engine** | `sliceworks-engine-v0.6.html` | Physics and runtime. Roll and flick controls; rigid bodies with voxel contact physics, soft bodies, gas, fracture, joints with limits, terrain. Loads `.soli`, `.sost`, `.soan`, `.soga`; exports `.soga` and cartridges. | Ed Interim |
+| **SliceWorks Player** | `sliceworks-player-v0.2.html` | The console. Plays a `.soga`, or boots straight into a cartridge. Try [`cartridges/two-dice.html`](cartridges/two-dice.html). | — |
 
 Older versions stay in the repo next to the current ones.
 
 ## The goal
 
-A fifth platform: a console. **It exists now, as v0.1.** The Engine can export a *cartridge*: one HTML file holding the whole engine plus your scene, which boots straight into it with nothing but PLAY, RESET and the camera. The `.soga` is the ROM; the HTML is the console. Model it, stage it, throw it, ship it, all in a browser. Next: input, so cartridges can be games and not only scenes.
+A fifth platform: a console. **It exists now, and it takes input.** The Engine can export a *cartridge*: one HTML file holding the whole engine plus your scene, which boots straight into it. The `.soga` is the ROM; the HTML is the console. Since Engine v0.6 a cartridge can be played: Space or a tap rolls the dice, dragging a die flicks it, and the result comes up on screen. Model it, stage it, throw it, ship it, all in a browser.
 
 ## What's new (2026-10-12)
 
@@ -44,6 +44,8 @@ A fifth platform: a console. **It exists now, as v0.1.** The Engine can export a
 - **Hinge limits** (`limit_deg`) are enforced, measured from the authored pose, and hinge axes follow the model when it's rotated.
 - **SliceWorks Player v0.1 and cartridges.** See above.
 
+**Late night: the cartridge buttons (Engine v0.6, Player v0.2).** Space or a tap throws the dice, a drag flicks one (with an aim line), and when they stop the Engine reads the pips that face up: `⚀ ⚃   1 + 4 = 5`. The demo die is now 7×7×7 with standard pip layout (opposite faces sum to 7). Rolls are fair: each die is picked up into a random orientation before the toss, as a hand does (without that the face that started on top won ~22% of the time; with it, chi² ≈ 2.6 over 600 dice). Controls travel with the `.soga`, so each cartridge decides what its player can do.
+
 Formats and conventions: [docs/formats.md](docs/formats.md). Details in [CHANGELOG.md](CHANGELOG.md).
 
 ## Tests
@@ -52,6 +54,7 @@ Formats and conventions: [docs/formats.md](docs/formats.md). Details in [CHANGEL
 npm i playwright        # once
 node tests/physics.mjs   # dice land flat · tipping · stacking · momentum · hinge limits · Dice = Engine
 node tests/pipeline.mjs  # .sost + terrain · .soan (parametric, baked) · .soga resume · cartridges
+node tests/controls.mjs  # pip readout · fair rolls · Space, flick, HUD · cartridge controls
 ```
 
 ## Docs
@@ -66,7 +69,7 @@ node tests/pipeline.mjs  # .sost + terrain · .soan (parametric, baked) · .soga
 ## Credits
 
 **Kham** (Khamerron Ramsey Kizer): concept, vision, direction
-**Kehai Interim**: Slice of Life, voxel format and renderer; Engine v0.4–v0.5 contact physics, imports, cartridges and the Player; Dice v0.3–v0.4 core
+**Kehai Interim**: Slice of Life, voxel format and renderer; Engine v0.4–v0.6 contact physics, imports, cartridges, controls and the Player; Dice v0.3–v0.4 core
 **Komorebi**: Slice Studio, `.sost` format; Engine bug-fix pass
 **Vael Interim**: Slice and Dice
 **Ed Interim**: SliceWorks Engine

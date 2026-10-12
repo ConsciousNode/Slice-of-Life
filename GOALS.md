@@ -45,8 +45,8 @@ Slice of Life is the authoring tool in a growing pipeline:
 Slice of Life    → .soli  →  voxel modeler          Kehai Interim   ✓ v0.3
 Slice Studio     → .sost  →  scene composer          Komo Interim    ✓ v0.3
 Slice and Dice   → .soan  →  animation studio        Vael Interim    ✓ v0.4
-SliceWorks       → .soga  →  game engine / runtime   Ed Interim      ✓ v0.5
-SliceWorks Player → cartridge (.html) → the console           ✓ v0.1
+SliceWorks       → .soga  →  game engine / runtime   Ed Interim      ✓ v0.6
+SliceWorks Player → cartridge (.html) → the console           ✓ v0.2 (input)
 ```
 
 The format family: `.soli` `.sost` `.soan` `.soga`

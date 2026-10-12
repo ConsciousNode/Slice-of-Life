@@ -1,0 +1,2519 @@
+<!DOCTYPE html>
+<!--
+  SliceWorks Engine v0.6
+  ConsciousNode SoftWorks · 2026-10-12 · Kehai Interim
+
+  v0.6 — CONTROLS: cartridges you can play
+    · Space (or a tap on empty ground in the player) rolls every loose
+      rigid body. Each is picked up into a random orientation first, as a
+      hand does; without that the face that started on top won ~22% of
+      rolls. Fair to chi² < 4 over 1000 dice (tests/controls.mjs).
+    · Drag from a body and let go to flick it along the drag (dashed aim
+      line), with the spin a die gets leaving a hand. Drag elsewhere orbits.
+    · When everything comes to rest, the engine reads each body's upward
+      face: holes in the top layer of voxels are pips. The total shows at
+      the bottom of the screen. Works for any voxel die you model.
+    · R resets. Settings live in the Export tab and travel inside .soga and
+      cartridges (.soga v0.3 gains a `controls` block).
+
+  SliceWorks Engine v0.5
+  ConsciousNode SoftWorks · 2026-10-12
+  Contact physics: Kehai Interim
+
+  v0.5 — BODIES HIT EACH OTHER PROPERLY
+    · Body–body contact is voxel-accurate: every outer corner of one body is
+      tested against the other body's actual voxels (not boxes). Depth and
+      normal come from the shortest way out of the solid. Corners on an edge
+      or vertex are ambiguous between faces; the face that agrees with the
+      unambiguous contacts wins. Corners are inset by 0.004 so a corner lying
+      exactly on the other body's outline counts the same on every side.
+    · All contacts in a tick (floor and body–body) are solved together, 16
+      sweeps, so a die resting on a die and the floor under it agree.
+    · Each contact patch is reduced to a 4-point manifold (deepest, farthest,
+      largest area): same support polygon, far less rocking.
+    · Off-centre hits make spin; momentum is conserved in body–body hits.
+    · A body standing on the floor isn't pushed into it by the one above.
+    · Bodies sleep on any stable support: the floor or another body.
+    · Bodies joined by an attachment point don't collide with each other.
+    · Dice demo throws the dice into each other.
+    Measured: a die stays stacked on another up to ~2.5 voxels of overhang
+    (falls at 2.8; a 6-wide die tips at 3.0); 16/16 dropped dice land flat;
+    head-on collision conserves momentum exactly; 0.13 ms per tick for two
+    dice, 0.8 ms for two 24³ blocks.
+
+  SliceWorks Engine v0.4
+  Contact physics: Kehai Interim
+
+  v0.4 — CONTACT PHYSICS (the dice finally land on a face)
+    Measured on v0.3.2: 0 of 16 dropped dice came to rest flat; they froze
+    6–43° tilted on edges and corners. Nothing turned a collision into
+    torque: spin was free rotation decaying 8% per tick, so the "landing
+    face" was set by the starting spin, not by physics. The moment of
+    inertia (I) was computed and never used.
+    · Orientation is now a rotation matrix integrated with world angular
+      velocity (b.rot Euler angles are derived from it every tick, in the
+      exact convention rotVec uses, so the renderer, joints and .soga
+      export read it unchanged). Code that writes b.rot directly (the
+      'fixed' joint) is picked up automatically.
+    · Full inertia tensor per body (unit-cube voxels, density-weighted),
+      about the true centre of mass (voxel centres, not corners).
+    · Floor contact: every outer voxel corner is a contact candidate.
+      Sequential impulses at the touching corners, with restitution from
+      the material tables and Coulomb friction, so off-centre hits make
+      torque and a die on its edge tips onto a face by itself.
+    · Floor plane at y=0, where the grid is drawn (rigid bodies used to
+      rest 0.5 above it; soft clusters already used 0).
+    · A body only sleeps on a stable support (3+ contacts not in a line),
+      so nothing freezes balanced on an edge.
+    · Fixed 60 Hz timestep: the sim no longer runs 2× fast on 120 Hz screens.
+    Body–body collision is still AABB (v0.1 spec), now with boxes built
+    from the rotated corners.
+
+  SliceWorks Engine v0.3.2
+  ConsciousNode SoftWorks · 2026-07-01
+  Kham Kizer · Ed Interim · physics table idea: Kehai Interim
+  Bug-fix pass: Komorebi
+  Compliance patch (attachment points): Kehai Interim
+  Sleep-system patch (joints + soft clusters): Ed Interim
+
+  v0.3.2 — SLEEP SYSTEM PATCH
+    Two related gaps found by re-reading the v0.3.1 solvers with fresh
+    eyes, both the same root shape: a per-tick solver was allowed to
+    reposition a "sleeping" body/cluster with no floor recheck, because
+    sleeping things skip the gravity+floor pass entirely (that's where
+    the floor recheck lives).
+    · solveJointLinks(): joints were repositioning sleeping bodies
+      unconditionally. A jointed body resting while its neighbor was
+      still settling could get quietly dragged through the floor.
+      Fixed: waking a body the instant a joint actually corrects it
+      (dist>0.0005, same threshold as before) — mirrors how
+      resolveBodyPair already wakes bodies on AABB contact. Pairs
+      that are BOTH already asleep are skipped outright now, so a
+      fully-rested jointed chain doesn't do pointless work every tick.
+    · Soft cluster sleep was vestigial: c.sleeping existed, the gate
+      existed (`if (c.sleeping) continue`), but nothing ever set it
+      true — clusters simulated forever, no rest state, ever. Added
+      the actual floorTicks/onFloor transition (same SLEEP_V/SLEEP_T
+      thresholds as rigid bodies), and — same reasoning as the joint
+      fix — solveConstraints() now wakes a sleeping cluster the moment
+      a spring actually pulls on it, and skips pairs that are both
+      already asleep.
+    Neither of these ever crashed or errored — S.jointLinks and
+    S.constraints both keep running fine either way. It's a silent
+    correctness gap: things settle in the wrong place with no signal
+    anything went wrong. Flagged and fixed rather than left quiet.
+
+  v0.3.1 — ATTACHMENT POINT COMPLIANCE PATCH
+    Slice of Life v0.3 shipped authored joints (.soli `joints` array) —
+    this Engine build had zero awareness of them. parseSoli() silently
+    dropped the field. This patch closes that gap:
+    · parseSoli's `raw` already carried `joints` through unread — now read
+    · buildBodies() resolves each joint to the 2 nearest rigid/buoyant
+      bodies (by world distance to the body's nearest SURFACE voxel, not
+      its center of mass — a joint sits at a boundary, COM-distance would
+      mis-rank elongated bodies like a femur). Bodies still detected by
+      flood fill; the joint's existence/type is authored, same division
+      as always — detection finds bodies, intent says how they connect.
+    · Position-lock constraint (Gauss-Seidel, mass-weighted — same family
+      as the v0.3 soft-cluster solver, just applied between two whole
+      rigid bodies' anchor points instead of two point-mass clusters)
+    · 'fixed' additionally pulls relative rotation toward parity (an
+      honest analog of "weld" given this engine's free Euler-angle
+      rotation model — not a true quaternion constraint)
+    · 'hinge' additionally damps angular velocity perpendicular to the
+      authored axis, biasing rotation toward that axis over several
+      ticks. limit_deg is NOT YET enforced — that needs each body's
+      orientation tracked relative to joint bind-pose, not just running
+      Euler angles. Flagged honestly as v0.4 scope, not silently skipped.
+    · 'ball' = position lock only — which is, gratifyingly, the most
+      physically correct of the three given what's implemented: a true
+      ball joint has no rotational constraint at all.
+    · Joints whose two endpoints include a SOFT-cluster body are skipped
+      with a console warning — soft clusters' nominal pos/rot don't track
+      their real-time movement (only individual cluster positions do),
+      so a static anchor there would be quietly wrong. Cartilage modeled
+      in the original 'soft'/'tissue' slots (3/4) isn't in the v0.3
+      SOFT cluster set anyway, so the primary bone-cartilage-bone case
+      resolves to exactly the two bone bodies — the gap doesn't bite here.
+    · Joints survive resetSim() via stable per-body uid (not object
+      reference — fracture splices the bodies array, so uid lookup is
+      what keeps a joint pointed at the right body, or correctly orphans
+      it if that body fractured away)
+    · Debug mode renders joint anchors + connecting line, color-coded by
+      type — same palette as Slice of Life's Attachment Points panel
+      (teal=hinge, orange=ball, muted=fixed) for visual continuity
+      across the suite
+
+  v0.3 adds soft body simulation on top of the intact v0.2 baseline:
+    · 4 new soft deformable materials — jelly(10) gel(11) rubber(12) foam(13)
+      Appended AFTER v0.2 indices 0-9 — full .soli backward-compatibility preserved
+    · Cluster-based position solver: each soft body is gridded into
+      CLUSTER_SIZE² cells; clusters are particles connected by constraint springs
+    · Constraint network: adjacent clusters joined by rest-length springs
+      with per-material authored stiffness + damping profiles
+    · Soft floor collision per cluster using same elasticity table as rigid
+    · Soft body renderer: cluster-offset voxel positions, depth-sorted with
+      rigid bodies in the same painter's pass, ownGrid cached per body
+    · Debug mode: cluster centres (teal dots) + constraint edges
+    · Jelly demo: soft spherical blob, properly encoded
+
+  v0.2 baseline preserved intact:
+    · Rigid body physics (bone / polymer / metal / dense / wood)
+    · Per-material TMAC restitution-vs-velocity curves + friction tables
+    · Brittle fracture (bone: 2 frags, wood: 3) · ductile (metal) · elastic (polymer)
+    · Gas buoyancy (rises, no rigid collision)
+    · AABB collision + impulse response (checks aabb.minY for floor, not COM)
+    · Sleep system (floor ticks threshold)
+    · Face-based isometric renderer with depth sort + per-body ownGrid
+    · Dice demo · Gas demo · .soli / .sost import · .soga export
+
+  "A correctly modeled object is already a physics object."
+  "Soft bodies aren't declared. They're detected. Their shape emerges."
+  "A joint isn't detected. It's authored — and bound to whatever the
+   flood fill finds nearest. Detection and intent, working together."
+
+  Import: .soli (Slice of Life v0.1+, joints require v0.3+)  ·  .sost (Slice Studio v0.1+)
+  Export: .soga v0.2 (SliceWorks Game/Scene Format)
+
+  Xinu-compliant. Zero dependencies. Single file. MIT License.
+  https://github.com/ConsciousNode
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SliceWorks Player — ConsciousNode SoftWorks</title>
+<style>
+:root {
+  --bg:    #0b0a0f;
+  --bg2:   #131120;
+  --bg3:   #1a1828;
+  --bdr:   #2a2640;
+  --amber: #c89b4a;
+  --adim:  #6a5220;
+  --aglow: rgba(200,155,74,.10);
+  --teal:  #4ab8c8;
+  --tglow: rgba(74,184,200,.10);
+  --text:  #e4dff0;
+  --muted: #7a7498;
+  --mono:  ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
+  --t:     .13s ease;
+}
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+html,body {
+  height:100%; background:var(--bg); color:var(--text);
+  font-family:var(--mono); font-size:12px; overflow:hidden;
+}
+::-webkit-scrollbar { width:4px; }
+::-webkit-scrollbar-thumb { background:var(--bdr); border-radius:4px; }
+#app { display:flex; flex-direction:column; height:100dvh; }
+header {
+  display:flex; align-items:center; gap:6px; padding:5px 10px;
+  background:var(--bg2); border-bottom:1px solid var(--bdr);
+  flex-shrink:0; flex-wrap:wrap;
+}
+.logo     { font-size:13px; font-weight:800; color:var(--amber); letter-spacing:-.2px; }
+.logo-sub { font-size:8px; color:var(--muted); margin-top:1px; }
+.hsep     { width:1px; height:18px; background:var(--bdr); flex-shrink:0; }
+.hbtn {
+  padding:3px 8px; background:var(--bg3); border:1px solid var(--bdr);
+  color:var(--muted); font-family:var(--mono); font-size:9px;
+  cursor:pointer; white-space:nowrap; transition:all var(--t);
+}
+.hbtn:hover    { border-color:var(--amber); color:var(--amber); }
+.hbtn.pri      { background:var(--aglow); border-color:var(--adim); color:var(--amber); }
+.hbtn.pri:hover{ border-color:var(--amber); }
+.hbtn.on       { background:var(--tglow); border-color:var(--teal); color:var(--teal); }
+.ml { margin-left:auto; }
+.main-row { display:flex; flex:1; min-height:0; overflow:hidden; }
+#cwrap { flex:1; position:relative; overflow:hidden; background:var(--bg); }
+#cv    { position:absolute; inset:0; cursor:grab; }
+#cv.g  { cursor:grabbing; }
+#hint  {
+  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+  color:var(--muted); font-size:10px; text-align:center; line-height:2;
+  pointer-events:none;
+}
+/* ── v0.5 player mode (cartridges) ── */
+#player-bar { display:none; }
+#roll-hud { display:none; position:absolute; left:50%; bottom:22px; transform:translateX(-50%); z-index:2; padding:8px 18px; border:1px solid var(--amber); background:rgba(11,10,15,.85); color:var(--amber); font-size:20px; font-weight:800; letter-spacing:1px; border-radius:4px; pointer-events:none; white-space:nowrap; }
+#player-insert { display:none; position:absolute; inset:0; flex-direction:column; align-items:center; justify-content:center; gap:12px; z-index:2; }
+.ctl { display:flex; align-items:center; gap:6px; font-size:10px; color:var(--muted); margin-bottom:6px; cursor:pointer; }
+.cart-in { width:100%; background:var(--bg2); border:1px solid var(--bdr); color:var(--text, #ddd); font:inherit; font-size:11px; padding:5px 7px; margin-bottom:6px; box-sizing:border-box; }
+body.player .side { display:none; }
+body.player header > *:not(.pkeep) { display:none; }
+body.player header { justify-content:center; gap:12px; }
+body.player #player-bar { display:flex; align-items:baseline; gap:12px; padding:8px 14px; flex-wrap:wrap; }
+body.player #player-title { font-size:16px; font-weight:800; color:var(--amber); }
+body.player .player-sub { font-size:10px; color:var(--muted); }
+body.player #hint { display:none !important; }
+.side {
+  width:208px; flex-shrink:0; background:var(--bg2);
+  border-left:1px solid var(--bdr); display:flex; flex-direction:column;
+  overflow:hidden;
+}
+.tabs { display:flex; border-bottom:1px solid var(--bdr); flex-shrink:0; }
+.tab  {
+  flex:1; padding:5px 2px; font-size:9px; text-align:center;
+  color:var(--muted); cursor:pointer; border-right:1px solid var(--bdr);
+  transition:color var(--t);
+}
+.tab:last-child { border-right:none; }
+.tab:hover { color:var(--text); }
+.tab.act   { color:var(--amber); background:var(--aglow); }
+.tc        { flex:1; overflow-y:auto; min-height:0; }
+.pane      { display:none; padding:8px; }
+.pane.act  { display:block; }
+.sl { font-size:8px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin:8px 0 4px; }
+.sl:first-child { margin-top:0; }
+.bi {
+  padding:5px 7px; margin-bottom:3px; background:var(--bg3);
+  border:1px solid var(--bdr); cursor:pointer; transition:all var(--t);
+}
+.bi:hover { border-color:var(--amber); }
+.bi.sel   { border-color:var(--teal); background:var(--tglow); }
+.bi.soft  { border-left:3px solid var(--teal); }   /* v0.3: soft body indicator */
+.bn { font-size:9px; }
+.bd { font-size:8px; color:var(--muted); margin-top:2px; }
+.sr { display:flex; justify-content:space-between; padding:3px 0; border-bottom:1px solid var(--bdr); }
+.sk { font-size:9px; color:var(--muted); }
+.sv { font-size:9px; color:var(--amber); text-align:right; flex-shrink:0; margin-left:4px; }
+.eb {
+  width:100%; padding:6px; background:var(--bg3); border:1px solid var(--bdr);
+  color:var(--muted); font:9px var(--mono); cursor:pointer; margin-bottom:6px;
+  transition:all var(--t);
+}
+.eb:hover { border-color:var(--amber); color:var(--amber); }
+.en { font-size:8px; color:var(--muted); line-height:1.7; }
+.sbar {
+  display:flex; gap:14px; padding:3px 10px;
+  background:var(--bg2); border-top:1px solid var(--bdr); flex-shrink:0;
+}
+.si { font-size:8px; color:var(--muted); }
+.si span { color:var(--amber); }
+</style>
+<script>window.SLICE_PLAYER=true;</script>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div>
+      <div class="logo">SliceWorks Engine</div>
+      <div class="logo-sub">ConsciousNode SoftWorks &middot; v0.6</div>
+    </div>
+    <div class="hsep"></div>
+    <button class="hbtn" onclick="document.getElementById('fi-soli').click()">LOAD .SOLI</button>
+    <button class="hbtn" onclick="document.getElementById('fi-sost').click()">LOAD .SOST</button>
+    <button class="hbtn" onclick="document.getElementById('fi-soan').click()" title="Animation from Slice and Dice, applied to the loaded scene">LOAD .SOAN</button>
+    <button class="hbtn" onclick="document.getElementById('fi-soga').click()" title="A saved scene with its physics state">LOAD .SOGA</button>
+    <button class="hbtn pri" onclick="diceDemo()">&#9860; DICE DEMO</button>
+    <button class="hbtn pri" onclick="gasDemo()">&#128168; GAS DEMO</button>
+    <button class="hbtn pri" onclick="jellyDemo()">&#127744; JELLY DEMO</button>
+    <div class="hsep"></div>
+    <button class="hbtn pkeep" id="btn-play" onclick="togglePlay()">&#9654; PLAY</button>
+    <button class="hbtn" onclick="stepOnce()">&#9197; STEP</button>
+    <button class="hbtn pkeep" onclick="resetSim()">&#8635; RESET</button>
+    <button class="hbtn" id="btn-debug" onclick="toggleDebug()">DEBUG</button>
+    <div class="hsep ml"></div>
+    <span style="font-size:9px;color:var(--muted)">Ed Interim · Kehai Interim &middot; v0.6</span>
+  </header>
+
+  <div id="player-bar">
+    <div id="player-title">SliceWorks</div>
+    <span class="player-sub" id="player-sub">a SliceWorks cartridge · drag to orbit · scroll to zoom</span>
+  </div>
+  <div class="main-row">
+    <div id="cwrap">
+      <div id="roll-hud"></div>
+      <div id="player-insert">
+        <div style="font-size:15px;color:var(--amber);font-weight:700">Insert cartridge</div>
+        <div style="font-size:10px;color:var(--muted);line-height:1.7;text-align:center">Load a .soga scene saved from SliceWorks Engine.<br>Nothing leaves your computer.</div>
+        <button class="hbtn pri" onclick="document.getElementById('fi-cart').click()">LOAD .SOGA</button>
+      </div>
+      <canvas id="cv"></canvas>
+      <div id="hint">
+        Load a .soli or .sost file,<br>
+        or press <span style="color:var(--amber)">&#9860; DICE DEMO</span>
+        or <span style="color:var(--amber)">&#127744; JELLY DEMO</span><br>
+        to begin simulation.
+      </div>
+    </div>
+
+    <div class="side">
+      <div class="tabs">
+        <div class="tab act" data-t="scene"   onclick="switchTab('scene')">SCENE</div>
+        <div class="tab"     data-t="physics" onclick="switchTab('physics')">PHYSICS</div>
+        <div class="tab"     data-t="mats"    onclick="switchTab('mats')">MATS</div>
+        <div class="tab"     data-t="export"  onclick="switchTab('export')">EXPORT</div>
+      </div>
+      <div class="tc">
+        <div class="pane act" id="pane-scene">
+          <div class="sl">Bodies</div>
+          <div id="body-list"><div style="font-size:9px;color:var(--muted);padding:4px 0">No scene loaded.</div></div>
+        </div>
+        <div class="pane" id="pane-physics">
+          <div class="sl">Simulation</div>
+          <div id="phys-stats">
+            <div class="sr"><span class="sk">Tick</span><span class="sv">0</span></div>
+            <div class="sr"><span class="sk">Sim time</span><span class="sv">0.00s</span></div>
+          </div>
+          <div class="sl">Parameters</div>
+          <div class="sr"><span class="sk">Gravity</span><span class="sv">100.8 vox/s&sup2;</span></div>
+          <div class="sr"><span class="sk">Rigid solver</span><span class="sv">voxel contacts + impulses</span></div>
+          <div class="sr"><span class="sk">Soft solver</span><span class="sv">cluster spring (GS)</span></div>
+          <div class="sr"><span class="sk">Joint solver</span><span class="sv">pivot-lock (GS)</span></div>
+          <div class="sr"><span class="sk">Rigid mats</span><span class="sv">bone poly metal dense wood stone</span></div>
+          <div class="sr"><span class="sk">Soft mats</span><span class="sv">jelly gel rubber foam</span></div>
+        </div>
+        <div class="pane" id="pane-mats">
+          <div class="sl">Authored Material Identity</div>
+          <div id="mat-list"></div>
+        </div>
+        <div class="pane" id="pane-export">
+          <div class="sl">Export</div>
+          <button class="eb" onclick="exportSoga()">EXPORT .SOGA</button>
+          <div class="sl" style="margin-top:14px">Controls</div>
+          <label class="ctl"><input type="checkbox" id="ctl-roll" checked onchange="S.controls.roll=this.checked"> Space / tap rolls everything</label>
+          <label class="ctl"><input type="checkbox" id="ctl-flick" checked onchange="S.controls.flick=this.checked"> Drag a body to flick it</label>
+          <label class="ctl"><input type="checkbox" id="ctl-readout" checked onchange="S.controls.readout=this.checked"> Read the dice when they stop</label>
+          <div class="sl" style="margin-top:14px">Cartridge</div>
+          <input id="cart-title" class="cart-in" type="text" placeholder="Title" value="Dice">
+          <button class="eb" onclick="exportCartridge()">EXPORT CARTRIDGE (.HTML)</button>
+          <div class="en">
+            The engine plus this scene in one HTML file that boots straight into it:
+            no editor, just PLAY, RESET and the camera. The .soga is the ROM; the HTML is the console.
+          </div>
+          <div class="en">
+            Self-contained scene snapshot with embedded .soli data and current physics state.<br><br>
+            One file. Bring it anywhere the engine runs.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sbar">
+    <div class="si">TICK <span id="st-tick">0</span></div>
+    <div class="si">BODIES <span id="st-bodies">0</span></div>
+    <div class="si">AWAKE <span id="st-awake">0</span></div>
+    <div class="si">CLUSTERS <span id="st-clusters">0</span></div>
+    <div class="si">JOINTS <span id="st-joints">0</span></div>
+    <div class="si">SIM <span id="st-sim">0.00</span>s</div>
+  </div>
+</div>
+
+<input type="file" id="fi-soli" accept=".soli" style="display:none" onchange="onLoadSoli(event)">
+<input type="file" id="fi-sost" accept=".sost" style="display:none" onchange="onLoadSost(event)">
+<input type="file" id="fi-soan" accept=".soan" style="display:none" onchange="onLoadSoan(event)">
+<input type="file" id="fi-soga" accept=".soga" style="display:none" onchange="onLoadSoga(event)">
+<input type="file" id="fi-cart" accept=".soga" style="display:none" onchange="onInsertCartridge(event)">
+
+<script>
+'use strict';
+// v0.5: the engine keeps a pristine copy of its own page, so it can write a
+// cartridge: itself plus a .soga, as one HTML file that boots straight into
+// the game. (Captured before anything changes the DOM.)
+const ENGINE_SOURCE='<!DOCTYPE html>\n'+document.documentElement.outerHTML;
+
+// ════════════════════════════════════════════════════════════════
+//  MATERIALS
+//  CRITICAL: indices 0-9 match v0.2 exactly — .soli files store
+//  these indices in their voxel grids. Do not reorder.
+//  v0.3 soft materials appended at 10-13.
+// ════════════════════════════════════════════════════════════════
+const MAT = [
+  // ── v0.2 baseline ─────────────────────────────────────────────
+  { name:'void',    density:0,      elast:0,    color:null,      behavior:'none'    },           // 0
+  { name:'gas',     density:0.001,  elast:0.95, color:'#88ccff', behavior:'buoyant' },           // 1
+  { name:'liquid',  density:1.000,  elast:0,    color:'#3377ff', behavior:'fluid'   },           // 2
+  { name:'soft',    density:0.500,  elast:0.70, color:'#55dd88', behavior:'soft'    },           // 3
+  { name:'tissue',  density:1.100,  elast:0.40, color:'#ffaa55', behavior:'soft'    },           // 4
+  { name:'bone',    density:1.900,  color:'#eeeebb', behavior:'brittle',                         // 5
+    friction:0.45, curve:[[0,0.10],[6,0.10]],
+    fractureVelocity:1.8, fractureFragments:2 },
+  { name:'polymer', density:1.400,  color:'#bb88ff', behavior:'elastic',                         // 6
+    friction:0.22, curve:[[0,0.62],[6,0.68]] },
+  { name:'metal',   density:7.800,  color:'#8899bb', behavior:'ductile',                         // 7
+    friction:0.30, curve:[[0,0.42],[1.2,0.30],[3.0,0.12],[6,0.06]] },
+  { name:'dense',   density:11.300, color:'#ff5533', behavior:'rigid',                           // 8
+    friction:0.55, curve:[[0,0.04],[6,0.04]] },
+  { name:'wood',    density:0.650,  color:'#9a6a3c', behavior:'brittle-fibrous',                 // 9
+    friction:0.50, curve:[[0,0.14],[6,0.14]],
+    fractureVelocity:1.2, fractureFragments:3 },
+  // ── v0.3 soft deformable materials ────────────────────────────
+  { name:'jelly',   density:1.0,   color:'#c04080', behavior:'soft-deform',                     // 10
+    friction:0.60, curve:[[0,0.55],[6,0.60]], stiffness:0.30, damping:0.10 },
+  { name:'gel',     density:1.1,   color:'#8040c0', behavior:'soft-deform',                     // 11
+    friction:0.55, curve:[[0,0.45],[6,0.50]], stiffness:0.50, damping:0.15 },
+  { name:'rubber',  density:0.9,   color:'#d08040', behavior:'soft-deform',                     // 12
+    friction:0.70, curve:[[0,0.65],[6,0.70]], stiffness:0.70, damping:0.08 },
+  { name:'foam',    density:0.3,   color:'#c0c080', behavior:'soft-deform',                     // 13
+    friction:0.45, curve:[[0,0.35],[6,0.40]], stiffness:0.20, damping:0.25 },
+  // ── v0.5 ──────────────────────────────────────────────────────
+  { name:'stone',   density:2.6,   color:'#5a5878', behavior:'rigid',                           // 14
+    friction:0.60, curve:[[0,0.20],[6,0.20]] },       // Slice Studio terrain voxels
+];
+const STONE=14;
+
+const RIGID   = new Set([5, 6, 7, 8, 9, 14]);        // v0.2 unchanged
+const SOFT    = new Set([10, 11, 12, 13]);        // v0.3 new
+const BUOYANT = new Set([1]);                     // v0.2 unchanged
+
+// Same palette as Slice of Life's Attachment Points panel — visual
+// continuity across the suite for the same authored concept.
+const JOINT_COLORS = { fixed:'#7a7498', hinge:'#4ab8c8', ball:'#e8a040' };
+
+// ════════════════════════════════════════════════════════════════
+//  ATTACHMENT POINT SOLVER CONSTANTS (v0.3.1)
+//  Position-based, Gauss-Seidel — same family as the soft-cluster
+//  solver, applied between two whole rigid bodies' anchor points.
+// ════════════════════════════════════════════════════════════════
+const JOINT_POS_STIFF  = 0.6;   // pivot-coincidence correction strength
+const JOINT_VEL_DAMP   = 0.35;  // removes relative velocity along the constraint axis
+const JOINT_ROT_STIFF  = 0.25;  // 'fixed' only — pulls relative rotation toward parity
+const JOINT_HINGE_BIAS = 0.15;  // 'hinge' only — fraction of off-axis angVel removed/tick
+let   nextBodyUid = 1;          // stable id — survives resetSim's body reconstruction,
+                                 // naturally orphans a joint if its body fractured away
+
+const FLOOR_PROFILE = { friction:0.50, curve:[[0,0.30],[6,0.30]] };
+
+// ════════════════════════════════════════════════════════════════
+//  RESPONSE TABLES (TMAC-inspired — Kehai Interim)
+//  Built once at load; runtime cost = one array read per collision.
+//  Extended automatically to cover all MAT.length entries.
+// ════════════════════════════════════════════════════════════════
+const BIN_SIZE = 0.05;
+const MAX_VEL  = 6.0;
+const BINS     = Math.ceil(MAX_VEL / BIN_SIZE);
+
+function sampleCurve(pts, v) {
+  if (!pts || !pts.length) return 0;
+  if (v <= pts[0][0]) return pts[0][1];
+  for (let i=1; i<pts.length; i++) {
+    if (v <= pts[i][0]) {
+      const [v0,e0]=[pts[i-1][0],pts[i-1][1]], [v1,e1]=[pts[i][0],pts[i][1]];
+      return e0 + (e1-e0) * (v-v0) / ((v1-v0)||1);
+    }
+  }
+  return pts[pts.length-1][1];
+}
+
+let RESP_TABLE, FLOOR_TABLE, FRIC_PAIR, FRIC_FLOOR;
+
+function buildResponseTables() {
+  const n = MAT.length;
+  RESP_TABLE  = new Float32Array(n*n*BINS);
+  FLOOR_TABLE = new Float32Array(n*BINS);
+  FRIC_PAIR   = new Float32Array(n*n);
+  FRIC_FLOOR  = new Float32Array(n);
+  for (let a=0; a<n; a++) {
+    const fa = MAT[a].friction || 0;
+    FRIC_FLOOR[a] = (fa + FLOOR_PROFILE.friction) * 0.5;
+    for (let bin=0; bin<BINS; bin++) {
+      const v  = bin*BIN_SIZE;
+      const ea = MAT[a].curve ? sampleCurve(MAT[a].curve, v) : (MAT[a].elast||0);
+      FLOOR_TABLE[a*BINS+bin] = Math.min(ea, sampleCurve(FLOOR_PROFILE.curve, v));
+    }
+    for (let b=0; b<n; b++) {
+      const fb = MAT[b].friction || 0;
+      FRIC_PAIR[a*n+b] = (fa+fb) * 0.5;
+      for (let bin=0; bin<BINS; bin++) {
+        const v  = bin*BIN_SIZE;
+        const ea = MAT[a].curve ? sampleCurve(MAT[a].curve, v) : (MAT[a].elast||0);
+        const eb = MAT[b].curve ? sampleCurve(MAT[b].curve, v) : (MAT[b].elast||0);
+        RESP_TABLE[(a*n+b)*BINS+bin] = Math.min(ea, eb);
+      }
+    }
+  }
+}
+
+const lookupFloorE    = (mat, v) => FLOOR_TABLE[mat*BINS + Math.min(BINS-1, Math.floor(Math.abs(v)/BIN_SIZE))];
+const lookupPairE     = (a,b,v)  => RESP_TABLE[(a*MAT.length+b)*BINS + Math.min(BINS-1, Math.floor(Math.abs(v)/BIN_SIZE))];
+const lookupFricFloor = (mat)    => FRIC_FLOOR[mat];
+const lookupFricPair  = (a,b)    => FRIC_PAIR[a*MAT.length+b];
+
+// ════════════════════════════════════════════════════════════════
+//  PHYSICS CONSTANTS
+// ════════════════════════════════════════════════════════════════
+let   G           = 0.028;    // gravity (voxels/tick², = 100.8 voxels/s²); scene files may set it
+const LIN_DAMP    = 0.998;    // linear damping per tick
+const ANG_DAMP    = 0.995;    // angular damping per tick (v0.4: was 0.92, which killed all tumbling)
+let   FLOOR_Y     = 0;        // v0.4: floor plane where the grid is drawn; .soan may set it
+const CONTACT_ITERS = 16;     // sequential-impulse passes per tick (over all contacts together)
+const REST_V      = 0.06;     // below this approach speed, contacts don't bounce (kills jitter)
+const ROLL_DAMP   = 0.985;    // extra angular damping while touching the floor
+const SLEEP_V     = 0.015;    // linear sleep threshold
+const SLEEP_W     = 0.008;    // angular sleep threshold
+const SLEEP_T     = 30;       // floor ticks before sleep
+const CLUSTER_SIZE = 2;       // voxels per soft cluster cell side
+const GAS_RISE    = 0.012;
+const GAS_DAMP    = 0.985;
+const GAS_CEILING = 80;
+
+// ════════════════════════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════════════════════════
+const S = {
+  models:    [],
+  instances: [],
+  bodies:    [],
+  clusters:  [],       // all soft clusters (references into body.clusters)
+  constraints: [],     // all soft constraints (references into body.constraints)
+  jointLinks: [],       // resolved attachment-point constraints (v0.3.1)
+  origJointLinks: null, // snapshot for resetSim(), parallel to S.orig
+  orig:      null,
+  running:   false,
+  debug:     false,
+  tick:      0,
+  simTime:   0,
+  cam: { rotY:0.52, rotX:-0.42, zoom:1.0, panX:0, panY:0 },
+  drag:    null,
+  touches: [],
+  selected: null,
+};
+
+// ════════════════════════════════════════════════════════════════
+//  MATH
+// ════════════════════════════════════════════════════════════════
+function rotVec(x, y, z, rX, rY, rZ) {
+  let tx = x*Math.cos(rY)+z*Math.sin(rY), tz = -x*Math.sin(rY)+z*Math.cos(rY);
+  x=tx; z=tz;
+  let ty = y*Math.cos(rX)-z*Math.sin(rX); tz = y*Math.sin(rX)+z*Math.cos(rX);
+  y=ty; z=tz;
+  tx = x*Math.cos(rZ)-y*Math.sin(rZ); ty = x*Math.sin(rZ)+y*Math.cos(rZ);
+  return [tx, ty, z];
+}
+
+// ── v0.4 rotation-matrix helpers (row-major 3×3) ─────────────────
+// rotVec applies M = Rz·Rx·Ry; building M from rotVec itself keeps the
+// two conventions identical by construction.
+function eulerToMat(rx, ry, rz) {
+  const c0=rotVec(1,0,0,rx,ry,rz), c1=rotVec(0,1,0,rx,ry,rz), c2=rotVec(0,0,1,rx,ry,rz);
+  return [c0[0],c1[0],c2[0], c0[1],c1[1],c2[1], c0[2],c1[2],c2[2]];
+}
+function matToEuler(M) {
+  // M = Rz·Rx·Ry ⇒ M21 = sinX, M20 = −cosX·sinY, M22 = cosX·cosY, M01 = −sinZ·cosX, M11 = cosZ·cosX
+  const sx=Math.max(-1,Math.min(1,M[7])), x=Math.asin(sx);
+  if (Math.abs(sx)<0.999999) return { x, y:Math.atan2(-M[6],M[8]), z:Math.atan2(-M[1],M[4]) };
+  return { x, y:0, z:Math.atan2(M[3],M[0]) };      // gimbal: put all twist in Z
+}
+function matMul(A,B) {
+  const C=new Array(9);
+  for (let i=0;i<3;i++) for (let j=0;j<3;j++) C[i*3+j]=A[i*3]*B[j]+A[i*3+1]*B[3+j]+A[i*3+2]*B[6+j];
+  return C;
+}
+function matT(M) { return [M[0],M[3],M[6],M[1],M[4],M[7],M[2],M[5],M[8]]; }
+function rotAxisMat(u,a) {   // rotation by angle a about unit axis u
+  const c=Math.cos(a), s=Math.sin(a), t=1-c, [x,y,z]=u;
+  return [t*x*x+c, t*x*y-s*z, t*x*z+s*y, t*x*y+s*z, t*y*y+c, t*y*z-s*x, t*x*z-s*y, t*y*z+s*x, t*z*z+c];
+}
+// Signed rotation of matrix D about unit axis u (swing–twist: the twist part)
+function twistAngle(D,u) {
+  const w=Math.sqrt(Math.max(0,1+D[0]+D[4]+D[8]))/2;
+  let qx,qy,qz,qw;
+  if (w>1e-6) { qw=w; qx=(D[7]-D[5])/(4*w); qy=(D[2]-D[6])/(4*w); qz=(D[3]-D[1])/(4*w); }
+  else {      // 180°-ish: fall back to the largest diagonal term
+    const i=(D[0]>D[4]&&D[0]>D[8])?0:(D[4]>D[8]?1:2);
+    if (i===0) { const s=Math.sqrt(1+D[0]-D[4]-D[8])*2; qx=s/4; qy=(D[1]+D[3])/s; qz=(D[2]+D[6])/s; qw=(D[7]-D[5])/s; }
+    else if (i===1) { const s=Math.sqrt(1+D[4]-D[0]-D[8])*2; qy=s/4; qx=(D[1]+D[3])/s; qz=(D[5]+D[7])/s; qw=(D[2]-D[6])/s; }
+    else { const s=Math.sqrt(1+D[8]-D[0]-D[4])*2; qz=s/4; qx=(D[2]+D[6])/s; qy=(D[5]+D[7])/s; qw=(D[3]-D[1])/s; }
+  }
+  const p=qx*u[0]+qy*u[1]+qz*u[2];
+  let a=2*Math.atan2(p,qw); if (a>Math.PI) a-=2*Math.PI; if (a<-Math.PI) a+=2*Math.PI;
+  return a;
+}
+function matVec(M,x,y,z) { return [M[0]*x+M[1]*y+M[2]*z, M[3]*x+M[4]*y+M[5]*z, M[6]*x+M[7]*y+M[8]*z]; }
+function orthonormalize(M) {          // Gram–Schmidt on the columns
+  let a=[M[0],M[3],M[6]], b=[M[1],M[4],M[7]];
+  let n=Math.hypot(...a); a=a.map(v=>v/n);
+  const d=a[0]*b[0]+a[1]*b[1]+a[2]*b[2]; b=b.map((v,i)=>v-d*a[i]);
+  n=Math.hypot(...b); b=b.map(v=>v/n);
+  const c=[a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+  return [a[0],b[0],c[0], a[1],b[1],c[1], a[2],b[2],c[2]];
+}
+function inv3(m) {
+  const [a,b,c,d,e,f,g,h,i]=m, A=e*i-f*h, B=-(d*i-f*g), C=d*h-e*g, det=a*A+b*B+c*C;
+  if (Math.abs(det)<1e-12) return [0,0,0,0,0,0,0,0,0];
+  return [A/det,-(b*i-c*h)/det,(b*f-c*e)/det, B/det,(a*i-c*g)/det,-(a*f-c*d)/det, C/det,-(a*h-b*g)/det,(a*e-b*d)/det];
+}
+// The body's orientation matrix. Rebuilt from b.rot if anything else
+// (a joint, a reset, a fracture) wrote b.rot since the last tick.
+function ensureR(b) {
+  if (!b.R || b._rx!==b.rot.x || b._ry!==b.rot.y || b._rz!==b.rot.z) b.R=eulerToMat(b.rot.x,b.rot.y,b.rot.z);
+  return b.R;
+}
+function syncEuler(b) {
+  const e=matToEuler(b.R); b.rot.x=e.x; b.rot.y=e.y; b.rot.z=e.z;
+  b._rx=b.rot.x; b._ry=b.rot.y; b._rz=b.rot.z;
+}
+// Rotate by world angular velocity ω (rad/tick) for one tick (Rodrigues)
+function integrateRotation(b) {
+  const R=ensureR(b), w=b.angVel, th=Math.hypot(w.x,w.y,w.z);
+  if (th<1e-12) return;
+  const kx=w.x/th, ky=w.y/th, kz=w.z/th, c=Math.cos(th), s=Math.sin(th), t=1-c;
+  const Q=[t*kx*kx+c, t*kx*ky-s*kz, t*kx*kz+s*ky,
+           t*kx*ky+s*kz, t*ky*ky+c, t*ky*kz-s*kx,
+           t*kx*kz-s*ky, t*ky*kz+s*kx, t*kz*kz+c];
+  b.R=orthonormalize(matMul(Q,R));
+  syncEuler(b);
+}
+
+function depthOf(wx, wy, wz) {
+  const { rotY, rotX } = S.cam;
+  const rz = -wx*Math.sin(rotY) + wz*Math.cos(rotY);
+  return wy*Math.sin(rotX) + rz*Math.cos(rotX);
+}
+
+function adjColor(hex, f) {
+  if (!hex) return '#556';
+  const r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16);
+  const t=Math.abs(f)*0.55, blend=f>=0?255:0;
+  return `rgb(${Math.round(r+(blend-r)*t)},${Math.round(g+(blend-g)*t)},${Math.round(b+(blend-b)*t)})`;
+}
+
+let CELL=10, OX=0, OY=0;
+
+function projectPt(wx, wy, wz) {
+  const { rotY, rotX, panX, panY } = S.cam;
+  const cY=Math.cos(rotY), sY=Math.sin(rotY);
+  const rx= wx*cY + wz*sY, rz= -wx*sY + wz*cY;
+  const cX=Math.cos(rotX), sX=Math.sin(rotX);
+  const ry2= ry_raw(wy,rz,cX,sX);
+  return { sx: rx*CELL+OX+panX, sy: -ry2*CELL+OY+panY };
+}
+function ry_raw(wy,rz,cX,sX) { return wy*cX - rz*sX; }
+
+// ════════════════════════════════════════════════════════════════
+//  PARSERS
+// ════════════════════════════════════════════════════════════════
+function parseSoli(json, name) {
+  const d = (typeof json==='string') ? JSON.parse(json) : json;
+  if (d.magic !== 'SOLI') throw new Error('Not a .soli file');
+  const res = d.resolution || { x:d.rx||32, y:d.ry||32, z:d.rz||32 };
+  const RX=res.x, RY=res.y, RZ=res.z;
+  const bin=atob(d.voxels);
+  const voxels=new Uint8Array(bin.length);
+  for (let i=0;i<bin.length;i++) voxels[i]=bin.charCodeAt(i);
+  const materials=MAT.map(m=>({...m}));
+  if (d.materials) d.materials.forEach((m,i)=>{
+    if (i>0&&i<materials.length) {
+      if (m.name)  materials[i].name=m.name;
+      if (m.color) materials[i].color=m.color;
+    }
+  });
+  return { name:name||'model.soli', RX, RY, RZ, voxels, materials, raw:d };
+}
+
+function parseSost(json) {
+  const d=JSON.parse(json);
+  if (d.format!=='sost') throw new Error('Not a .sost file');
+  const models=(d.library||[]).map(e=>parseSoli(e.soli,e.name));
+  const instances=(d.instances||[]).map((i,k)=>({
+    id:i.id??k, modelIdx:i.modelIdx, x:i.x||0, y:i.y||0, z:i.z||0,
+    rotX:i.rotX||0, rotY:i.rotY||0, rotZ:i.rotZ||0,
+  }));
+  return { models, instances, terrain:d.environment?.terrain||[] };
+}
+
+function ownedAt(model, grid, gx, gy, gz) {
+  if (gx<0||gy<0||gz<0||gx>=model.RX||gy>=model.RY||gz>=model.RZ) return 0;
+  return grid[gx + gy*model.RX + gz*model.RX*model.RY];
+}
+
+// Body lookup by stable uid — not by array index/reference, since
+// fracture splices S.bodies and resetSim() reconstructs body objects.
+function bodyByUid(uid){ return S.bodies.find(b=>b.uid===uid); }
+
+// A surface voxel's CURRENT world position — same rotate-then-translate
+// convention the renderer and AABB code already use. Joint anchors reuse
+// this exact transform so "nearest surface point" means what it looks like.
+function worldSurfPoint(body, sv) {
+  const [lx,ly,lz]=rotVec(sv.lx-body.com.x, sv.ly-body.com.y, sv.lz-body.com.z, body.rot.x, body.rot.y, body.rot.z);
+  return { x:body.pos.x+lx, y:body.pos.y+ly, z:body.pos.z+lz };
+}
+
+// ════════════════════════════════════════════════════════════════
+//  FLOOD FILL
+// ════════════════════════════════════════════════════════════════
+function floodFill(model, visited, ix, iy, iz, classSet) {
+  const { RX, RY, RZ, voxels }=model;
+  const VI=(x,y,z)=>x+y*RX+z*RX*RY;
+  const comp=[], stk=[[ix,iy,iz]];
+  while (stk.length) {
+    const [cx,cy,cz]=stk.pop();
+    if (cx<0||cx>=RX||cy<0||cy>=RY||cz<0||cz>=RZ) continue;
+    const i2=VI(cx,cy,cz);
+    if (visited[i2]) continue;
+    const cm=voxels[i2];
+    if (!cm||!classSet.has(cm)) continue;
+    visited[i2]=1;
+    comp.push({lx:cx,ly:cy,lz:cz,mat:cm});
+    stk.push([cx+1,cy,cz],[cx-1,cy,cz],[cx,cy+1,cz],[cx,cy-1,cz],[cx,cy,cz+1],[cx,cy,cz-1]);
+  }
+  return comp;
+}
+
+// ════════════════════════════════════════════════════════════════
+//  BODY PHYSICS COMPUTATION (shared by rigid + post-fracture)
+// ════════════════════════════════════════════════════════════════
+function computeBodyPhys(model, voxList, voxelCentre=false) {
+  const materials=model.materials;
+  // v0.5: sums in grid scan order (z, y, x), not flood-fill order, so every
+  // tool computing the same body gets bit-identical mass, COM and inertia
+  voxList=[...voxList].sort((a,b)=>(a.lz-b.lz)||(a.ly-b.ly)||(a.lx-b.lx));
+  let totalMass=0, cx_=0, cy_=0, cz_=0;
+  for (const v of voxList) {
+    const d=materials[v.mat].density;
+    totalMass+=d; cx_+=v.lx*d; cy_+=v.ly*d; cz_+=v.lz*d;
+  }
+  cx_/=totalMass; cy_/=totalMass; cz_/=totalMass;
+  // v0.4: rigid/buoyant bodies use the true centre of mass of unit-cube
+  // voxels (centre = corner + 0.5). Soft bodies keep the old convention.
+  if (voxelCentre) { cx_+=0.5; cy_+=0.5; cz_+=0.5; }
+  let sumE=0;
+  for (const v of voxList) sumE+=materials[v.mat].elast||0;
+  const elast=sumE/voxList.length;
+  let rms2=0;
+  for (const v of voxList) {
+    const dx=v.lx-cx_, dy=v.ly-cy_, dz=v.lz-cz_;
+    rms2+=dx*dx+dy*dy+dz*dz;
+  }
+  const I=Math.max(0.4*totalMass*rms2/voxList.length,1);
+  const volByMat={};
+  for (const v of voxList) volByMat[v.mat]=(volByMat[v.mat]||0)+1;
+  let dominantMat=voxList[0].mat, domCount=0;
+  let fractureMat=null, fractureV=Infinity;
+  for (const k in volByMat) {
+    const id=+k;
+    if (volByMat[id]>domCount) { domCount=volByMat[id]; dominantMat=id; }
+    const fv=MAT[id].fractureVelocity;
+    if (fv!=null&&fv<fractureV) { fractureV=fv; fractureMat=id; }
+  }
+  const ownGrid=new Uint8Array(model.RX*model.RY*model.RZ);
+  for (const v of voxList) ownGrid[v.lx+v.ly*model.RX+v.lz*model.RX*model.RY]=1;
+  const surf=voxList.filter(v=>
+    !ownedAt(model,ownGrid,v.lx+1,v.ly,v.lz)||!ownedAt(model,ownGrid,v.lx-1,v.ly,v.lz)||
+    !ownedAt(model,ownGrid,v.lx,v.ly+1,v.lz)||!ownedAt(model,ownGrid,v.lx,v.ly-1,v.lz)||
+    !ownedAt(model,ownGrid,v.lx,v.ly,v.lz+1)||!ownedAt(model,ownGrid,v.lx,v.ly,v.lz-1)
+  );
+  // v0.4: full inertia tensor about the COM (point masses at voxel centres
+  // plus each unit cube's own m/6 per axis), and the outer voxel corners
+  // used as floor-contact candidates.
+  const h=voxelCentre?0.5:0;
+  let Ixx=0,Iyy=0,Izz=0,Ixy=0,Ixz=0,Iyz=0;
+  for (const v of voxList) {
+    const d=materials[v.mat].density, x=v.lx+h-cx_, y=v.ly+h-cy_, z=v.lz+h-cz_;
+    Ixx+=d*(y*y+z*z+1/6); Iyy+=d*(x*x+z*z+1/6); Izz+=d*(x*x+y*y+1/6);
+    Ixy-=d*x*y; Ixz-=d*x*z; Iyz-=d*y*z;
+  }
+  const Ib=[Ixx,Ixy,Ixz, Ixy,Iyy,Iyz, Ixz,Iyz,Izz], IbInv=inv3(Ib);
+  const seen=new Set(), corners=[];
+  for (const v of surf) for (let dx=0;dx<2;dx++) for (let dy=0;dy<2;dy++) for (let dz=0;dz<2;dz++) {
+    const X=v.lx+dx, Y=v.ly+dy, Z=v.lz+dz, k=X+','+Y+','+Z;
+    if (seen.has(k)) continue; seen.add(k);
+    corners.push([X-cx_, Y-cy_, Z-cz_]);
+  }
+  // Fixed order: sequential impulses depend on contact order, so sort the
+  // corners and every tool running this core gets the same answer.
+  corners.sort((a,b)=>a[0]-b[0]||a[1]-b[1]||a[2]-b[2]);
+  return { com:{x:cx_,y:cy_,z:cz_}, mass:totalMass, elast, I, Ib, IbInv, corners, dominantMat, fractureMat, ownGrid, surf };
+}
+
+// ════════════════════════════════════════════════════════════════
+//  SOFT BODY — CLUSTER BUILDER (v0.3)
+//
+//  Divides a soft body's voxel list into a CLUSTER_SIZE³ grid.
+//  Uses LOCAL cluster IDs throughout — no global S.clusters indexing.
+//  Returns { clusters, constraints } for attachment to body.
+// ════════════════════════════════════════════════════════════════
+function buildSoftClusters(body, inst) {
+  const { model }=body;
+  const clusterMap=new Map();   // "cx,cy,cz" → cluster object
+
+  // Assign each soft voxel to a grid cell
+  for (const v of body.voxels) {
+    const cx=Math.floor(v.lx/CLUSTER_SIZE);
+    const cy=Math.floor(v.ly/CLUSTER_SIZE);
+    const cz=Math.floor(v.lz/CLUSTER_SIZE);
+    const key=`${cx},${cy},${cz}`;
+    if (!clusterMap.has(key))
+      clusterMap.set(key, { voxels:[], mat:v.mat, gx:cx, gy:cy, gz:cz });
+    clusterMap.get(key).voxels.push(v);
+  }
+
+  // Compute COM, world position, bottom offset for each cluster
+  const clusters=[];
+  for (const [key, c] of clusterMap) {
+    let mx=0,my=0,mz=0,mass=0, minLocalY=Infinity;
+    for (const v of c.voxels) {
+      const d=MAT[v.mat].density;
+      mass+=d; mx+=v.lx*d; my+=v.ly*d; mz+=v.lz*d;
+      if (v.ly<minLocalY) minLocalY=v.ly;
+    }
+    mx/=mass; my/=mass; mz/=mass;
+    c.localId  = clusters.length;
+    c.com      = { x:mx, y:my, z:mz };
+    c.mass     = mass;
+    c.pos      = { x:inst.x+mx, y:inst.y+my, z:inst.z+mz };
+    c.vel      = { x:0, y:0, z:0 };
+    c.sleeping = false; c.onFloor = false; c.floorTicks = 0;
+    // bottomOffset: how far below COM the lowest voxel sits (negative)
+    c.bottomOffset = minLocalY - my;
+    clusters.push(c);
+  }
+
+  // Build spring constraints between adjacent grid cells
+  const constraints=[];
+  const seen=new Set();
+  for (const c of clusters) {
+    const neighbors=[
+      [c.gx+1,c.gy,c.gz],[c.gx-1,c.gy,c.gz],
+      [c.gx,c.gy+1,c.gz],[c.gx,c.gy-1,c.gz],
+      [c.gx,c.gy,c.gz+1],[c.gx,c.gy,c.gz-1],
+    ];
+    for (const [nx,ny,nz] of neighbors) {
+      const nk=`${nx},${ny},${nz}`;
+      const nc=clusterMap.get(nk);
+      if (!nc) continue;
+      const pairKey=c.localId<nc.localId?`${c.localId}-${nc.localId}`:`${nc.localId}-${c.localId}`;
+      if (seen.has(pairKey)) continue;
+      seen.add(pairKey);
+      const dx=nc.pos.x-c.pos.x, dy=nc.pos.y-c.pos.y, dz=nc.pos.z-c.pos.z;
+      const restLen=Math.hypot(dx,dy,dz)||1;
+      const mat=MAT[c.mat];
+      constraints.push({ c1:c, c2:nc, restLen,
+        stiffness: mat.stiffness||0.4, damping: mat.damping||0.1 });
+    }
+  }
+
+  return { clusters, constraints };
+}
+
+// ════════════════════════════════════════════════════════════════
+//  ATTACHMENT POINT RESOLUTION (v0.3.1)
+//  Authored joints (.soli `joints` array) bind to whichever 2 bodies
+//  flood fill actually found nearest. Bodies stay detected; the
+//  joint's existence + type is the part that can't be inferred from
+//  material adjacency alone — that's what Slice of Life's modeler
+//  authored, and this is where it gets honored.
+// ════════════════════════════════════════════════════════════════
+function resolveJointsForInstance(model, inst, instanceBodies, place) {
+  const joints = (model.raw && model.raw.joints) || [];
+  if (!joints.length) return;
+
+  // Soft-cluster bodies excluded as endpoints: their nominal pos/rot
+  // never update after creation (only individual cluster positions
+  // move), so a static anchor there would be quietly wrong rather
+  // than honestly absent. Cartilage in the original soft/tissue slots
+  // (3/4) isn't in the v0.3 SOFT cluster set anyway, so the common
+  // bone-cartilage-bone case never actually needs this exclusion.
+  const candidates = instanceBodies.filter(b=>b.type==='rigid'||b.type==='buoyant');
+
+  for (const j of joints) {
+    if (candidates.length<2) {
+      console.warn(`[joints] "${j.name||'joint'}" skipped — fewer than 2 rigid/buoyant bodies detected for this instance.`);
+      continue;
+    }
+    const jw=place({ x:j.position?.[0]??0, y:j.position?.[1]??0, z:j.position?.[2]??0 }), wx=jw.x, wy=jw.y, wz=jw.z;
+
+    // Nearest SURFACE voxel per candidate, not center-of-mass distance —
+    // a joint sits at a boundary; an elongated body's COM can be far
+    // from the joint while its surface is right there.
+    const ranked = candidates.map(b=>{
+      let minD=Infinity;
+      for (const sv of b.surf) {
+        const p=worldSurfPoint(b,sv);
+        const d=(p.x-wx)**2+(p.y-wy)**2+(p.z-wz)**2;
+        if (d<minD) minD=d;
+      }
+      return { b, minD };
+    }).sort((p,q)=>p.minD-q.minD);
+
+    const [first, second] = ranked;
+    if (Math.sqrt(second.minD)>10) {
+      console.warn(`[joints] "${j.name||'joint'}" — nearest two bodies are `+
+        `${Math.sqrt(first.minD).toFixed(1)} and ${Math.sqrt(second.minD).toFixed(1)} voxels away. Check placement.`);
+    }
+    const bodyA=first.b, bodyB=second.b;
+    const jx=j.position?.[0]??0, jy=j.position?.[1]??0, jz=j.position?.[2]??0;
+    S.jointLinks.push({
+      name: j.name||'joint',
+      type: j.type||'hinge',
+      axis: j.axis||[0,0,1],
+      limitMin: j.limit_deg?.[0]??-90,
+      limitMax: j.limit_deg?.[1]??90,
+      aUid: bodyA.uid, bUid: bodyB.uid,
+      // Local offset from each body's own COM to the joint point — both
+      // are in model-local space already (same frame voxel coords use),
+      // so no rotation un-baking is needed; forward rotVec() each tick
+      // gives the current world anchor, same convention as worldSurfPoint.
+      anchorA: { x:jx-bodyA.com.x, y:jy-bodyA.com.y, z:jz-bodyA.com.z },
+      anchorB: { x:jx-bodyB.com.x, y:jy-bodyB.com.y, z:jz-bodyB.com.z },
+      // v0.5: relative orientation at bind time (B in A's frame), so hinge
+      // limits can be measured as rotation away from the authored pose
+      bind: matMul(matT(ensureR(bodyA)), ensureR(bodyB)),
+    });
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+//  BODY DETECTION
+// ════════════════════════════════════════════════════════════════
+// v0.5: ONE placement convention for the whole suite (Studio, Dice, Engine):
+// an instance's x,y,z is where the model's bottom-centre pivot
+// (RX/2, 0, RZ/2) goes, and the instance rotation turns the whole model about
+// it. Every body of the instance is placed by the same transform, so a
+// rotated multi-body model stays in one piece. (v0.4 and earlier rotated each
+// body about its own centre of mass and used the grid corner as origin, so
+// Studio scenes loaded shifted, and rotated skeletons came apart.)
+function instancePlacer(inst, model) {
+  const R=eulerToMat(inst.rotX||0, inst.rotY||0, inst.rotZ||0), px=model.RX/2, pz=model.RZ/2;
+  return c=>{ const o=matVec(R, c.x-px, c.y, c.z-pz); return { x:inst.x+o[0], y:inst.y+o[1], z:inst.z+o[2] }; };
+}
+
+function buildBodies() {
+  S.bodies=[]; S.clusters=[]; S.constraints=[]; S.jointLinks=[]; resetWarm();
+
+  for (let ii=0; ii<S.instances.length; ii++) {
+    const inst=S.instances[ii];
+    const model=S.models[inst.modelIdx];
+    if (!model) continue;
+    const { RX, RY, RZ, voxels }=model;
+    const place=instancePlacer(inst, model);
+    const VI=(x,y,z)=>x+y*RX+z*RX*RY;
+    const visitedRigid=new Uint8Array(RX*RY*RZ);
+    const visitedGas  =new Uint8Array(RX*RY*RZ);
+    const visitedSoft =new Uint8Array(RX*RY*RZ);
+    const bodiesStartIdx=S.bodies.length;  // marks where THIS instance's bodies begin
+
+    // ── Rigid bodies ──────────────────────────────────────────
+    for (let iz=0;iz<RZ;iz++) for (let iy=0;iy<RY;iy++) for (let ix=0;ix<RX;ix++) {
+      const m=voxels[VI(ix,iy,iz)];
+      if (m&&RIGID.has(m)&&!visitedRigid[VI(ix,iy,iz)]) {
+        const comp=floodFill(model,visitedRigid,ix,iy,iz,RIGID);
+        if (comp.length) {
+          const phys=computeBodyPhys(model,comp,true);
+          S.bodies.push({
+            name:model.name, model, type:'rigid', uid:nextBodyUid++,
+            voxels:comp, surf:phys.surf, ownGrid:phys.ownGrid,
+            com:phys.com, mass:phys.mass, elast:phys.elast, I:phys.I, Ib:phys.Ib, IbInv:phys.IbInv, corners:phys.corners,
+            dominantMat:phys.dominantMat, fractureMat:phys.fractureMat,
+            pos:place(phys.com), static:!!inst.static,
+            vel:{ x:0,y:0,z:0 }, rot:{ x:inst.rotX||0,y:inst.rotY||0,z:inst.rotZ||0 },
+            angVel:{ x:0,y:0,z:0 },
+            aabb:null, onFloor:false, floorTicks:0, sleeping:false,
+          });
+        }
+      }
+    }
+
+    // ── Buoyant (gas) bodies ──────────────────────────────────
+    for (let iz=0;iz<RZ;iz++) for (let iy=0;iy<RY;iy++) for (let ix=0;ix<RX;ix++) {
+      const m=voxels[VI(ix,iy,iz)];
+      if (m&&BUOYANT.has(m)&&!visitedGas[VI(ix,iy,iz)]) {
+        const comp=floodFill(model,visitedGas,ix,iy,iz,BUOYANT);
+        if (comp.length) {
+          const phys=computeBodyPhys(model,comp,true);
+          S.bodies.push({
+            name:model.name, model, type:'buoyant', uid:nextBodyUid++,
+            voxels:comp, surf:phys.surf, ownGrid:phys.ownGrid,
+            com:phys.com, mass:phys.mass, elast:phys.elast, I:phys.I, Ib:phys.Ib, IbInv:phys.IbInv, corners:phys.corners,
+            dominantMat:phys.dominantMat, fractureMat:null,
+            pos:place(phys.com), static:!!inst.static,
+            vel:{ x:0,y:0,z:0 }, rot:{ x:inst.rotX||0,y:inst.rotY||0,z:inst.rotZ||0 },
+            angVel:{ x:0,y:0,z:0 },
+            aabb:null, onFloor:false, floorTicks:0, sleeping:false,
+          });
+        }
+      }
+    }
+
+    // ── Soft bodies (v0.3) ────────────────────────────────────
+    for (let iz=0;iz<RZ;iz++) for (let iy=0;iy<RY;iy++) for (let ix=0;ix<RX;ix++) {
+      const m=voxels[VI(ix,iy,iz)];
+      if (m&&SOFT.has(m)&&!visitedSoft[VI(ix,iy,iz)]) {
+        const comp=floodFill(model,visitedSoft,ix,iy,iz,SOFT);
+        if (comp.length) {
+          const phys=computeBodyPhys(model,comp);
+          const body={
+            name:model.name, model, type:'soft', uid:nextBodyUid++,
+            voxels:comp, surf:phys.surf, ownGrid:phys.ownGrid,
+            com:phys.com, mass:phys.mass, elast:phys.elast, I:phys.I, Ib:phys.Ib, IbInv:phys.IbInv, corners:phys.corners,
+            dominantMat:phys.dominantMat, fractureMat:null,
+            pos:place(phys.com),
+            vel:{ x:0,y:0,z:0 },
+            aabb:null, sleeping:false,
+            clusters:[], constraints:[],
+          };
+          S.bodies.push(body);
+          const sc=buildSoftClusters(body, { x:inst.x-RX/2, y:inst.y, z:inst.z-RZ/2 });   // soft bodies don't rotate
+          body.clusters    = sc.clusters;
+          body.constraints = sc.constraints;
+          // Register in global lists (these are the same objects, by reference)
+          S.clusters.push(...sc.clusters);
+          S.constraints.push(...sc.constraints);
+        }
+      }
+    }
+
+    // ── Attachment points (v0.3.1) — resolved against THIS instance's
+    //    bodies only, so a joint never accidentally binds across two
+    //    unrelated instances that happen to be spatially close ──────
+    for (let k=bodiesStartIdx;k<S.bodies.length;k++) S.bodies[k].instIdx=ii;
+    resolveJointsForInstance(model, inst, S.bodies.slice(bodiesStartIdx), place);
+  }
+  buildTerrainBody();
+  for (const b of S.bodies) if (b.type!=='soft') updateAABB(b);
+  rebuildUI();
+}
+
+// ════════════════════════════════════════════════════════════════
+//  FRACTURE (v0.2 — restored)
+// ════════════════════════════════════════════════════════════════
+function fractureBody(b) {
+  const nFrag=(b.fractureMat!=null&&MAT[b.fractureMat].fractureFragments)||2;
+  let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity,minZ=Infinity,maxZ=-Infinity;
+  for (const v of b.voxels) {
+    if (v.lx<minX)minX=v.lx; if (v.lx>maxX)maxX=v.lx;
+    if (v.ly<minY)minY=v.ly; if (v.ly>maxY)maxY=v.ly;
+    if (v.lz<minZ)minZ=v.lz; if (v.lz>maxZ)maxZ=v.lz;
+  }
+  const ext={lx:maxX-minX,ly:maxY-minY,lz:maxZ-minZ};
+  const axis=(ext.lx>=ext.ly&&ext.lx>=ext.lz)?'lx':(ext.ly>=ext.lz?'ly':'lz');
+  const sorted=[...b.voxels].sort((p,q)=>p[axis]-q[axis]);
+  const splits=[];
+  for (let i=1;i<nFrag;i++) {
+    const base=i/nFrag, jit=(Math.random()-0.5)*0.3/nFrag;
+    splits.push(Math.max(0.05,Math.min(0.95,base+jit)));
+  }
+  const chunks=[]; let lastIdx=0;
+  for (const s of splits) {
+    const idx=Math.max(lastIdx+1,Math.floor(sorted.length*s));
+    chunks.push(sorted.slice(lastIdx,idx)); lastIdx=idx;
+  }
+  chunks.push(sorted.slice(lastIdx));
+  const frags=[];
+  for (const chunkVox of chunks) {
+    if (!chunkVox.length) continue;
+    const phys=computeBodyPhys(b.model,chunkVox,true);
+    const [dx,dy,dz]=rotVec(phys.com.x-b.com.x,phys.com.y-b.com.y,phys.com.z-b.com.z,b.rot.x,b.rot.y,b.rot.z);
+    const len=Math.hypot(dx,dy,dz)||1, KICK=0.06;
+    frags.push({
+      name:b.name+'_frag', model:b.model, type:'rigid',
+      voxels:chunkVox, surf:phys.surf, ownGrid:phys.ownGrid,
+      com:phys.com, mass:phys.mass, elast:phys.elast, I:phys.I, Ib:phys.Ib, IbInv:phys.IbInv, corners:phys.corners,
+      dominantMat:phys.dominantMat, fractureMat:phys.fractureMat,
+      pos:{ x:b.pos.x+dx, y:b.pos.y+dy, z:b.pos.z+dz },
+      vel:{ x:b.vel.x+(dx/len)*KICK+(Math.random()-.5)*.02,
+            y:b.vel.y+Math.abs(dy/len)*KICK*.6+Math.random()*.01,
+            z:b.vel.z+(dz/len)*KICK+(Math.random()-.5)*.02 },
+      rot:{...b.rot},
+      angVel:{ x:b.angVel.x*(.7+Math.random()*.6),
+               y:b.angVel.y*(.7+Math.random()*.6),
+               z:b.angVel.z*(.7+Math.random()*.6) },
+      aabb:null, onFloor:false, floorTicks:0, sleeping:false,
+    });
+  }
+  return frags;
+}
+
+// ════════════════════════════════════════════════════════════════
+//  AABB (v0.2 — restored: uses voxels, not surf, for accuracy)
+// ════════════════════════════════════════════════════════════════
+function updateAABB(b) {
+  if (b.corners && b.type!=='soft') {        // v0.4: exact box of the rotated outer corners
+    const R=ensureR(b); let a=Infinity,c=Infinity,e=Infinity,bb=-Infinity,d=-Infinity,f=-Infinity;
+    for (const k of b.corners) {
+      const x=b.pos.x+R[0]*k[0]+R[1]*k[1]+R[2]*k[2], y=b.pos.y+R[3]*k[0]+R[4]*k[1]+R[5]*k[2], z=b.pos.z+R[6]*k[0]+R[7]*k[1]+R[8]*k[2];
+      if (x<a)a=x; if (x>bb)bb=x; if (y<c)c=y; if (y>d)d=y; if (z<e)e=z; if (z>f)f=z;
+    }
+    b.aabb={minX:a,minY:c,minZ:e,maxX:bb,maxY:d,maxZ:f}; return;
+  }
+  let minX=Infinity,minY=Infinity,minZ=Infinity;
+  let maxX=-Infinity,maxY=-Infinity,maxZ=-Infinity;
+  const {x:px,y:py,z:pz}=b.pos, {x:rx,y:ry,z:rz}=b.rot||{x:0,y:0,z:0};
+  const {x:cx,y:cy,z:cz}=b.com;
+  for (const v of b.voxels) {
+    const [wx,wy,wz]=rotVec(v.lx-cx,v.ly-cy,v.lz-cz,rx,ry,rz);
+    const gx=px+wx,gy=py+wy,gz=pz+wz;
+    if (gx<minX)minX=gx; if (gx+1>maxX)maxX=gx+1;
+    if (gy<minY)minY=gy; if (gy+1>maxY)maxY=gy+1;
+    if (gz<minZ)minZ=gz; if (gz+1>maxZ)maxZ=gz+1;
+  }
+  b.aabb={minX,minY,minZ,maxX,maxY,maxZ};
+}
+
+// ════════════════════════════════════════════════════════════════
+//  CONSTRAINT SOLVER (v0.3 — Gauss-Seidel position correction)
+// ════════════════════════════════════════════════════════════════
+function solveConstraints() {
+  for (let iter=0; iter<4; iter++) {
+    for (const con of S.constraints) {
+      const {c1,c2,restLen,stiffness,damping}=con;
+      if (c1.sleeping&&c2.sleeping) continue;
+      const dx=c2.pos.x-c1.pos.x, dy=c2.pos.y-c1.pos.y, dz=c2.pos.z-c1.pos.z;
+      const dist=Math.hypot(dx,dy,dz);
+      if (dist<0.001) continue;
+      // A real spring correction is about to move an endpoint — if one
+      // side was asleep, wake it, same reasoning as solveJointLinks():
+      // sleeping clusters skip gravity+floor entirely, so letting a
+      // constraint quietly reposition one with no floor recheck could
+      // clip it through the ground.
+      if (Math.abs(dist-restLen)>0.001) {
+        if (c1.sleeping) { c1.sleeping=false; c1.floorTicks=0; }
+        if (c2.sleeping) { c2.sleeping=false; c2.floorTicks=0; }
+      }
+      const nx=dx/dist, ny=dy/dist, nz=dz/dist;
+      const diff=(dist-restLen)*stiffness*0.5;
+      // Relative velocity along constraint axis (damping)
+      const rvDot=(c2.vel.x-c1.vel.x)*nx+(c2.vel.y-c1.vel.y)*ny+(c2.vel.z-c1.vel.z)*nz;
+      const dampCorr=rvDot*damping*0.5;
+      const corr=diff+dampCorr;
+      // Position correction
+      c1.pos.x+=nx*corr; c1.pos.y+=ny*corr; c1.pos.z+=nz*corr;
+      c2.pos.x-=nx*corr; c2.pos.y-=ny*corr; c2.pos.z-=nz*corr;
+      // Velocity correction (implicit damping)
+      c1.vel.x+=nx*dampCorr; c1.vel.y+=ny*dampCorr; c1.vel.z+=nz*dampCorr;
+      c2.vel.x-=nx*dampCorr; c2.vel.y-=ny*dampCorr; c2.vel.z-=nz*dampCorr;
+    }
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+//  ATTACHMENT POINT SOLVER (v0.3.1)
+//  Position-based, mass-weighted Gauss-Seidel — same family as
+//  solveConstraints() above, applied between two whole rigid bodies'
+//  anchor points instead of two point-mass clusters. 'fixed' and
+//  'hinge' layer a little extra on top; 'ball' is position-lock only,
+//  which happens to be exactly correct for a true ball joint.
+// ════════════════════════════════════════════════════════════════
+function solveJointLinks() {
+  for (const jl of S.jointLinks) {
+    const a=bodyByUid(jl.aUid), b=bodyByUid(jl.bUid);
+    if (!a||!b) continue;   // body gone (fractured away) — joint silently orphaned, not crashed
+    if (a.sleeping&&b.sleeping) continue;   // fully rested — no correction to make, no floor gap risked
+
+    const [ax,ay,az]=rotVec(jl.anchorA.x,jl.anchorA.y,jl.anchorA.z,a.rot.x,a.rot.y,a.rot.z);
+    const [bx,by,bz]=rotVec(jl.anchorB.x,jl.anchorB.y,jl.anchorB.z,b.rot.x,b.rot.y,b.rot.z);
+    const wax=a.pos.x+ax, way=a.pos.y+ay, waz=a.pos.z+az;
+    const wbx=b.pos.x+bx, wby=b.pos.y+by, wbz=b.pos.z+bz;
+    const dx=wbx-wax, dy=wby-way, dz=wbz-waz;
+    const dist=Math.hypot(dx,dy,dz);
+
+    if (dist>0.0005) {
+      // v0.3.2 fix: sleeping bodies skip physTick's gravity+floor pass
+      // entirely (the `continue` near the top of the per-body loop),
+      // but this solver was still repositioning them with no floor
+      // recheck — a joint could silently drag a sleeping body through
+      // the ground. Waking here puts it back through the normal pass
+      // next tick, same as resolveBodyPair already does on contact.
+      if (a.sleeping) { a.sleeping=false; a.floorTicks=0; }
+      if (b.sleeping) { b.sleeping=false; b.floorTicks=0; }
+      const nx=dx/dist, ny=dy/dist, nz=dz/dist;
+      const mt=a.mass+b.mass, ra=b.mass/mt, rb=a.mass/mt;
+      const corr=dist*JOINT_POS_STIFF;
+      a.pos.x+=nx*corr*ra; a.pos.y+=ny*corr*ra; a.pos.z+=nz*corr*ra;
+      b.pos.x-=nx*corr*rb; b.pos.y-=ny*corr*rb; b.pos.z-=nz*corr*rb;
+      // Damp relative velocity along the constraint axis so the joint
+      // settles instead of oscillating — inelastic on this axis only.
+      const rvDot=(b.vel.x-a.vel.x)*nx+(b.vel.y-a.vel.y)*ny+(b.vel.z-a.vel.z)*nz;
+      const J=-rvDot*JOINT_VEL_DAMP/(1/a.mass+1/b.mass);
+      a.vel.x-=nx*J/a.mass; a.vel.y-=ny*J/a.mass; a.vel.z-=nz*J/a.mass;
+      b.vel.x+=nx*J/b.mass; b.vel.y+=ny*J/b.mass; b.vel.z+=nz*J/b.mass;
+      updateAABB(a); updateAABB(b);
+    }
+
+    if (jl.type==='fixed') {
+      // Honest analog of "rigid weld" given this engine's free-running
+      // Euler-angle rotation — not a true quaternion constraint, but a
+      // real, distinct behavior from hinge/ball: pulls orientation AND
+      // angular velocity toward parity, on top of the shared pivot lock.
+      for (const k of ['x','y','z']) {
+        const dRot=(b.rot[k]-a.rot[k])*JOINT_ROT_STIFF*0.5;
+        a.rot[k]+=dRot; b.rot[k]-=dRot;
+        const dW=(b.angVel[k]-a.angVel[k])*JOINT_ROT_STIFF*0.5;
+        a.angVel[k]+=dW; b.angVel[k]-=dW;
+      }
+    } else if (jl.type==='hinge') {
+      // Biases rotation toward the authored axis by damping the
+      // perpendicular component of angular velocity on both bodies, a
+      // little each tick. v0.5: the axis is authored in the model's frame,
+      // so it's turned into world space with body A's orientation (v0.4
+      // used it as a world axis, wrong once the model rotates), and
+      // limit_deg is enforced below.
+      const [jx,jy,jz]=jl.axis; const jl_=Math.hypot(jx,jy,jz)||1;
+      const ux=jx/jl_, uy=jy/jl_, uz=jz/jl_;
+      const [hx,hy,hz]=matVec(ensureR(a),ux,uy,uz);              // hinge axis, world
+      for (const body of [a,b]) {
+        const dot=body.angVel.x*hx+body.angVel.y*hy+body.angVel.z*hz;
+        const px=body.angVel.x-hx*dot, py=body.angVel.y-hy*dot, pz=body.angVel.z-hz*dot;
+        body.angVel.x-=px*JOINT_HINGE_BIAS;
+        body.angVel.y-=py*JOINT_HINGE_BIAS;
+        body.angVel.z-=pz*JOINT_HINGE_BIAS;
+      }
+      // v0.5: limit_deg enforced. The hinge angle is B's rotation about the
+      // authored axis relative to A, measured from the bind pose. Past a
+      // limit, both bodies are turned back (by inverse inertia about the
+      // axis) and the relative spin that pushes further out is removed.
+      if (jl.bind) {
+        const RA=ensureR(a), RB=ensureR(b);
+        const D=matMul(matMul(matT(RA),RB),matT(jl.bind));       // in A's frame
+        const ang=twistAngle(D,[ux,uy,uz]);
+        const lo=jl.limitMin*Math.PI/180, hi=jl.limitMax*Math.PI/180;
+        const over=ang>hi?ang-hi:(ang<lo?ang-lo:0);
+        if (over) {
+          const wa=matVec(RA,ux,uy,uz);                           // hinge axis in world
+          const Ia=worldInvI(a), Ib=worldInvI(b);
+          const ka=wa[0]*matVec(Ia,...wa)[0]+wa[1]*matVec(Ia,...wa)[1]+wa[2]*matVec(Ia,...wa)[2];
+          const kb=wa[0]*matVec(Ib,...wa)[0]+wa[1]*matVec(Ib,...wa)[1]+wa[2]*matVec(Ib,...wa)[2];
+          const fa=ka/((ka+kb)||1), fb=kb/((ka+kb)||1);
+          if (fb) { b.R=orthonormalize(matMul(rotAxisMat(wa,-over*fb),RB)); syncEuler(b); }
+          if (fa) { a.R=orthonormalize(matMul(rotAxisMat(wa, over*fa),RA)); syncEuler(a); }
+          const rel=(b.angVel.x-a.angVel.x)*wa[0]+(b.angVel.y-a.angVel.y)*wa[1]+(b.angVel.z-a.angVel.z)*wa[2];
+          if (rel*over>0) {                                      // still moving outward
+            b.angVel.x-=wa[0]*rel*fb; b.angVel.y-=wa[1]*rel*fb; b.angVel.z-=wa[2]*rel*fb;
+            a.angVel.x+=wa[0]*rel*fa; a.angVel.y+=wa[1]*rel*fa; a.angVel.z+=wa[2]*rel*fa;
+          }
+          if (a.sleeping) { a.sleeping=false; a.floorTicks=0; }
+          if (b.sleeping) { b.sleeping=false; b.floorTicks=0; }
+          jl.atLimit=true;
+        } else jl.atLimit=false;
+      }
+    }
+    // 'ball': pivot lock only, intentionally — a true ball joint has
+    // no rotational constraint at all, so this is already correct.
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+//  PHYSICS TICK
+// ════════════════════════════════════════════════════════════════
+let pendingFractures=[];
+function checkFracture(body,speed) {
+  if (body.fractureMat!=null&&speed>MAT[body.fractureMat].fractureVelocity)
+    pendingFractures.push(body);
+}
+
+// ═══ SLICEWORKS CORE: CONTACTS (shared verbatim with Slice and Dice) ═══
+// A contact is { p: world point, n: unit normal pointing from B toward A,
+// depth }. B may be null (the floor) or static: infinite mass.
+// Sequential impulses at each contact point, with restitution from the
+// material response curves and Coulomb friction. Because every impulse
+// acts at its own point, off-centre hits produce torque.
+const ZERO9=[0,0,0,0,0,0,0,0,0];
+// Warm starting: each contact remembers last tick's impulse (keyed by body and
+// corner) and starts from it, so resting contacts converge instead of
+// re-solving from zero every tick. Callers reset it when a scene is rebuilt.
+// Measured 2026-10-12: with this solver (direct position correction, 4-point
+// manifolds) warm starting made resting stacks bounce, so it is off. The
+// bookkeeping stays so it can be revisited with split-impulse correction.
+const WARM_START=false;
+let WARM=new Map(), WARM_NEXT=new Map();
+function resetWarm(){ WARM=new Map(); WARM_NEXT=new Map(); }
+const bodyKey=b=>b.uid??b.id;
+function vcross(a,c){ return [a[1]*c[2]-a[2]*c[1], a[2]*c[0]-a[0]*c[2], a[0]*c[1]-a[1]*c[0]]; }
+function invMassOf(b){ return (!b||b.static)?0:1/b.mass; }
+function worldInvI(b){
+  if (!b||b.static) return ZERO9;
+  const R=ensureR(b);
+  return matMul(matMul(R,b.IbInv),[R[0],R[3],R[6],R[1],R[4],R[7],R[2],R[5],R[8]]);
+}
+function velAt(b,r){
+  if (!b||b.static) return [0,0,0];
+  const w=b.angVel, c=vcross([w.x,w.y,w.z],r); return [b.vel.x+c[0],b.vel.y+c[1],b.vel.z+c[2]];
+}
+function applyImpulse(b,Iw,r,J,sign){
+  if (!b||b.static) return;
+  const m=b.mass; b.vel.x+=sign*J[0]/m; b.vel.y+=sign*J[1]/m; b.vel.z+=sign*J[2]/m;
+  const t=vcross(r,J), dw=matVec(Iw,t[0],t[1],t[2]);
+  b.angVel.x+=sign*dw[0]; b.angVel.y+=sign*dw[1]; b.angVel.z+=sign*dw[2];
+}
+// Contacts are solved for the whole scene together (a stack needs the floor
+// and the die above it to agree), so this is split in two: prepare a group
+// of contacts between two bodies, then sweep every group a few times.
+// Contact reduction: a face resting on a face touches at dozens of voxel
+// corners, and an iterative solver spreads the load unevenly over that many
+// points (stacks rock and walk). Like most engines we keep a manifold of at
+// most 4 points per normal direction: the deepest, the farthest from it, then
+// the two that span the largest area. Same support polygon, solvable load.
+function reduceContacts(cs){
+  if (cs.length<=4) return cs;
+  const clusters=[];
+  for (const c of cs) {
+    let cl=clusters.find(k=>k.n[0]*c.n[0]+k.n[1]*c.n[1]+k.n[2]*c.n[2]>0.95);
+    if (!cl) { cl={ n:c.n, pts:[] }; clusters.push(cl); }
+    cl.pts.push(c);
+  }
+  const out=[];
+  for (const cl of clusters) {
+    const P=cl.pts; if (P.length<=4) { out.push(...P); continue; }
+    const d2=(a,b)=>(a.p[0]-b.p[0])**2+(a.p[1]-b.p[1])**2+(a.p[2]-b.p[2])**2;
+    const area=(a,b,c)=>{ const u=[b.p[0]-a.p[0],b.p[1]-a.p[1],b.p[2]-a.p[2]], v=[c.p[0]-a.p[0],c.p[1]-a.p[1],c.p[2]-a.p[2]], x=vcross(u,v); return Math.hypot(...x); };
+    let p0=P[0]; for (const c of P) if (c.depth>p0.depth+1e-9) p0=c;
+    let p1=P[0], best=-1; for (const c of P) { const d=d2(c,p0); if (d>best) { best=d; p1=c; } }
+    let p2=P[0]; best=-1; for (const c of P) { const A=area(p0,p1,c); if (A>best) { best=A; p2=c; } }
+    let p3=P[0]; best=-1;
+    for (const c of P) { const A=area(p0,p1,c)+area(p1,p2,c)+area(p2,p0,c); if (c!==p0&&c!==p1&&c!==p2&&A>best) { best=A; p3=c; } }   // = triangle area if c is inside it, more if outside
+    for (const q of [p0,p1,p2,p3]) if (!out.includes(q)) out.push(q);
+  }
+  return out;
+}
+function prepareContacts(a, b, cs, eFn, mu){
+  cs=reduceContacts(cs);
+  const ia=invMassOf(a), ib=invMassOf(b), Ia=worldInvI(a), Ib=worldInvI(b);
+  const g={ a, b, ia, ib, Ia, Ib, mu, impact:0, st:null };
+  g.st=cs.map(c=>{
+    const ra=[c.p[0]-a.pos.x,c.p[1]-a.pos.y,c.p[2]-a.pos.z];
+    const rb=b&&!b.static?[c.p[0]-b.pos.x,c.p[1]-b.pos.y,c.p[2]-b.pos.z]:null;
+    const o={ ...c, ra, rb, jn:0, jt:[0,0,0] };
+    const v=groupRel(g,o), vn=v[0]*c.n[0]+v[1]*c.n[1]+v[2]*c.n[2];
+    if (-vn>g.impact) g.impact=-vn;
+    const e=-vn>REST_V?eFn(-vn):0;
+    o.target=vn<0?-e*vn:0;
+    o.k=ia+ib+angTerm(Ia,ra,c.n)+angTerm(Ib,rb,c.n);
+    return o;
+  });
+  if (WARM_START) for (const c of g.st) {         // warm start from last tick
+    const w=c.key&&WARM.get(c.key); if (!w) continue;
+    c.jn=w.jn*0.9; c.jt=w.jt.map(x=>x*0.9);
+    const J=[c.n[0]*c.jn+c.jt[0], c.n[1]*c.jn+c.jt[1], c.n[2]*c.jn+c.jt[2]];
+    applyImpulse(a,Ia,c.ra,J,1); applyImpulse(b,Ib,c.rb,J,-1);
+  }
+  return g;
+}
+function angTerm(Iw,r,n){ if (Iw===ZERO9||!r) return 0; const rn=vcross(r,n), t=matVec(Iw,rn[0],rn[1],rn[2]), q=vcross(t,r); return q[0]*n[0]+q[1]*n[1]+q[2]*n[2]; }
+function groupRel(g,c){ const va=velAt(g.a,c.ra), vb=velAt(g.b,c.rb); return [va[0]-vb[0],va[1]-vb[1],va[2]-vb[2]]; }
+function solveGroupOnce(g){
+  const { a, b, ia, ib, Ia, Ib, mu }=g;
+  for (const c of g.st) {
+    const n=c.n; let v=groupRel(g,c);
+    const vn=v[0]*n[0]+v[1]*n[1]+v[2]*n[2];
+    let dj=(c.target-vn)/c.k; const nj=Math.max(0,c.jn+dj); dj=nj-c.jn; c.jn=nj;
+    if (dj) { const J=[n[0]*dj,n[1]*dj,n[2]*dj]; applyImpulse(a,Ia,c.ra,J,1); applyImpulse(b,Ib,c.rb,J,-1); }
+    // friction in the contact plane, clamped to this contact's Coulomb cone
+    v=groupRel(g,c); const vn2=v[0]*n[0]+v[1]*n[1]+v[2]*n[2];
+    const vt=[v[0]-vn2*n[0],v[1]-vn2*n[1],v[2]-vn2*n[2]], vtl=Math.hypot(...vt);
+    if (vtl>1e-9) {
+      const t=[vt[0]/vtl,vt[1]/vtl,vt[2]/vtl], kt=ia+ib+angTerm(Ia,c.ra,t)+angTerm(Ib,c.rb,t);
+      let jt=[c.jt[0]-t[0]*vtl/kt, c.jt[1]-t[1]*vtl/kt, c.jt[2]-t[2]*vtl/kt];
+      const jm=Math.hypot(...jt), lim=mu*c.jn;
+      if (jm>lim) jt=jt.map(x=>x*lim/jm);
+      const d=[jt[0]-c.jt[0],jt[1]-c.jt[1],jt[2]-c.jt[2]]; c.jt=jt;
+      applyImpulse(a,Ia,c.ra,d,1); applyImpulse(b,Ib,c.rb,d,-1);
+    }
+  }
+}
+function solveAllContacts(groups){
+  for (let it=0;it<CONTACT_ITERS;it++) for (const g of groups) solveGroupOnce(g);
+  WARM_NEXT=new Map();
+  for (const g of groups) for (const c of g.st) if (c.key) WARM_NEXT.set(c.key,{ jn:c.jn, jt:c.jt });
+  WARM=WARM_NEXT;
+  for (const g of groups) if (g.impact>0.05) { checkFracture(g.a,g.impact); if (g.b) checkFracture(g.b,g.impact); }
+}
+
+// Floor: every outer voxel corner below FLOOR_Y is a contact. Lifts the body
+// out (exactly), records the touching points in b._sup for the sleep test,
+// and returns a contact group (or null).
+function floorContact(b) {
+  const R=ensureR(b), C=b.corners; if (!C) return null;
+  const rw=[]; let minY=Infinity;
+  for (let i=0;i<C.length;i++) {
+    const k=C[i], r=matVec(R,k[0],k[1],k[2]); const y=b.pos.y+r[1];
+    if (y<minY) minY=y;
+    if (y<FLOOR_Y+0.02) { r.i=i; rw.push(r); }
+  }
+  if (minY>=FLOOR_Y) return null;
+  b.pos.y+=FLOOR_Y-minY;
+  const cs=[], bk=bodyKey(b);
+  for (const r of rw) { const y=b.pos.y+r[1]; if (y<FLOOR_Y+0.02) cs.push({ p:[b.pos.x+r[0],y,b.pos.z+r[2]], n:[0,1,0], depth:0, key:bk+'f'+r.i }); }
+  if (!cs.length) return null;
+  if (b._sup) for (const c of cs) b._sup.push(c.p);
+  b.onFloor=true;
+  return prepareContacts(b,null,cs,v=>lookupFloorE(b.dominantMat,v),lookupFricFloor(b.dominantMat));
+}
+
+// Is a body solid at grid cell (x,y,z) of its own model?
+function bodyOcc(b,x,y,z){
+  const m=b.model; if (x<0||y<0||z<0||x>=m.RX||y>=m.RY||z>=m.RZ) return 0;
+  return b.ownGrid[x+y*m.RX+z*m.RX*m.RY];
+}
+// For a point q (body's grid coords) inside the body: the shortest way out
+// along the six axes, through at most 3 solid voxels. Returns { d, n } (local)
+// plus `cands`, every exit within 0.5 of the best: a corner sitting on one of
+// the body's edges or vertices is about equally close to 2–3 faces, and the
+// pair solver uses the other contacts to decide which one is real.
+const EXIT_DIRS=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
+function exitDepth(b,q){
+  const ix=Math.floor(q[0]), iy=Math.floor(q[1]), iz=Math.floor(q[2]);
+  if (!bodyOcc(b,ix,iy,iz)) return null;
+  let best=null; const cands=[];
+  for (const d of EXIT_DIRS) {
+    const ax=d[0]?0:(d[1]?1:2), s=d[ax], c=[ix,iy,iz];
+    let dist=s>0?(c[ax]+1-q[ax]):(q[ax]-c[ax]), k=0;
+    while (k<3) { c[ax]+=s; if (!bodyOcc(b,c[0],c[1],c[2])) break; dist+=1; k++; }
+    if (k===3) continue;
+    cands.push({ d:dist, n:d });
+    if (!best||dist<best.d) best={ d:dist, n:d };
+  }
+  if (best) best.cands=cands.filter(c=>c.d<best.d+0.5);   // near-ties (edges and vertices)
+  return best;
+}
+// Two rigid bodies: corners of each that lie inside the other's voxels.
+function pairContact(a,b){
+  if ((a.static||a.sleeping)&&(b.static||b.sleeping)) return null;
+  const A=a.aabb, B=b.aabb;
+  if (!A||!B||A.maxX<B.minX||B.maxX<A.minX||A.maxY<B.minY||B.maxY<A.minY||A.maxZ<B.minZ||B.maxZ<A.minZ) return null;
+  const cs=[];
+  const collect=(P,Q,sign)=>{                      // corners of P inside Q; normal out of Q
+    const RP=ensureR(P), RQ=ensureR(Q), QB=Q.aabb;
+    const pk=bodyKey(P)+'>'+bodyKey(Q)+':';
+    for (let ci=0;ci<P.corners.length;ci++) { const k0=P.corners[ci];
+      // inset each corner a hair toward the body's centre, so a corner sitting
+      // exactly on the other body's outline counts the same on every side
+      const k=[k0[0]-0.004*Math.sign(k0[0]), k0[1]-0.004*Math.sign(k0[1]), k0[2]-0.004*Math.sign(k0[2])];
+      const r=matVec(RP,k[0],k[1],k[2]), px=P.pos.x+r[0], py=P.pos.y+r[1], pz=P.pos.z+r[2];
+      if (px<QB.minX||px>QB.maxX||py<QB.minY||py>QB.maxY||pz<QB.minZ||pz>QB.maxZ) continue;
+      const dx=px-Q.pos.x, dy=py-Q.pos.y, dz=pz-Q.pos.z;      // into Q's grid: Rᵀ·d + com
+      const q=[RQ[0]*dx+RQ[3]*dy+RQ[6]*dz+Q.com.x, RQ[1]*dx+RQ[4]*dy+RQ[7]*dz+Q.com.y, RQ[2]*dx+RQ[5]*dy+RQ[8]*dz+Q.com.z];
+      const e=exitDepth(Q,q); if (!e) continue;
+      const toW=n=>{ const w=matVec(RQ,n[0],n[1],n[2]); return sign>0?w:[-w[0],-w[1],-w[2]]; };
+      cs.push({ p:[px,py,pz], n:toW(e.n), depth:e.d, key:pk+ci,
+                alt:e.cands.length>1?e.cands.map(c=>({ n:toW(c.n), depth:c.d })):null });
+    }
+  };
+  collect(a,b,1); collect(b,a,-1);
+  if (!cs.length) return null;
+  // Edge corners are ambiguous between two faces: take the face that agrees
+  // with the contacts that aren't ambiguous (else with the overall average).
+  let ref=[0,0,0]; const clear=cs.filter(c=>!c.alt);
+  for (const c of (clear.length?clear:cs)) { ref[0]+=c.n[0]*(c.depth+.01); ref[1]+=c.n[1]*(c.depth+.01); ref[2]+=c.n[2]*(c.depth+.01); }
+  for (const c of cs) if (c.alt) {
+    let bestDot=-Infinity;
+    for (const a of c.alt) { const d=a.n[0]*ref[0]+a.n[1]*ref[1]+a.n[2]*ref[2]; if (d>bestDot) { bestDot=d; c.n=a.n; c.depth=a.depth; } }
+  }
+  if (!a.static) { a.sleeping=false; } if (!b.static) { b.sleeping=false; }
+  // positional correction along the depth-weighted normal, split by inverse mass
+  let N=[0,0,0], dmax=0;
+  for (const c of cs) { N[0]+=c.n[0]*c.depth; N[1]+=c.n[1]*c.depth; N[2]+=c.n[2]*c.depth; if (c.depth>dmax) dmax=c.depth; }
+  const nl=Math.hypot(...N)||1; N=N.map(x=>x/nl);
+  // A body already standing on the floor can't be pushed down into it, so
+  // the body on top takes the whole correction (otherwise stacks sag).
+  let wa=invMassOf(a), wb=invMassOf(b);
+  if (a.onFloor&&N[1]<-0.5) wa=0;
+  if (b.onFloor&&N[1]>0.5) wb=0;
+  const wt=wa+wb, corr=Math.max(0,dmax-0.01);
+  if (wt>0) {
+    a.pos.x+=N[0]*corr*wa/wt; a.pos.y+=N[1]*corr*wa/wt; a.pos.z+=N[2]*corr*wa/wt;
+    b.pos.x-=N[0]*corr*wb/wt; b.pos.y-=N[1]*corr*wb/wt; b.pos.z-=N[2]*corr*wb/wt;
+  }
+  for (const c of cs) { if (c.n[1]>0.5&&a._sup) a._sup.push(c.p); else if (c.n[1]<-0.5&&b._sup) b._sup.push(c.p); }
+  return prepareContacts(a,b,cs,v=>lookupPairE(a.dominantMat,b.dominantMat,v),lookupFricPair(a.dominantMat,b.dominantMat));
+}
+// Position-only floor pass (after pair contacts have pushed bodies around)
+function floorLift(b){
+  if (!b.corners||b.static) return;
+  const R=ensureR(b); let minY=Infinity;
+  for (const k of b.corners) { const y=b.pos.y+R[3]*k[0]+R[4]*k[1]+R[5]*k[2]; if (y<minY) minY=y; }
+  if (minY<FLOOR_Y) b.pos.y+=FLOOR_Y-minY;
+}
+// Stable support: 3+ support points that don't all lie on one line (xz).
+function supportStable(pts){
+  if (!pts||pts.length<3) return false;
+  let p0=pts[0], p1=pts[0], best=-1;
+  for (const p of pts) for (const q of pts) { const d=(p[0]-q[0])**2+(p[2]-q[2])**2; if (d>best) { best=d; p0=p; p1=q; } }
+  const lx=p1[0]-p0[0], lz=p1[2]-p0[2], L=Math.sqrt(best)||1;
+  for (const p of pts) if (Math.abs((p[0]-p0[0])*lz-(p[2]-p0[2])*lx)/L>0.25) return true;
+  return false;
+}
+// Sleep: slow, and resting on a stable support, for SLEEP_T ticks in a row.
+function sleepCheck(b){
+  if (b.sleeping||b.static) return;
+  const spd=Math.hypot(b.vel.x,b.vel.y,b.vel.z), ang=Math.hypot(b.angVel.x,b.angVel.y,b.angVel.z);
+  if (spd<SLEEP_V&&ang<SLEEP_W&&supportStable(b._sup)) {
+    if (++b.floorTicks>SLEEP_T) { b.sleeping=true; b.vel.x=b.vel.y=b.vel.z=0; b.angVel.x=b.angVel.y=b.angVel.z=0; }
+  } else b.floorTicks=0;
+}
+// ═══ END SLICEWORKS CORE: CONTACTS ═══
+
+function physTick() {
+  if (S.playback) { playbackTick(); return; }
+  pendingFractures=[];
+  for (const b of S.bodies) b._sup=[];      // support points gathered this tick (sleep test)
+  const groups=[];                          // every contact this tick, solved together
+
+  for (const b of S.bodies) {
+    if (b.sleeping) continue;
+
+    // ── Gas (buoyant) ────────────────────────────────────────
+    if (b.type==='buoyant') {
+      b.vel.y=(b.vel.y+GAS_RISE)*GAS_DAMP;
+      b.vel.x*=LIN_DAMP; b.vel.z*=LIN_DAMP;
+      b.pos.x+=b.vel.x; b.pos.y+=b.vel.y; b.pos.z+=b.vel.z;
+      integrateRotation(b);
+      b.angVel.x*=ANG_DAMP; b.angVel.y*=ANG_DAMP; b.angVel.z*=ANG_DAMP;
+      if (b.pos.y>GAS_CEILING) { b.pos.y=GAS_CEILING; b.vel.y=0; }
+      updateAABB(b); continue;
+    }
+
+    // ── Rigid (v0.4: rotation matrix + floor contact impulses) ──
+    if (b.type==='rigid'&&b.static) { if (!b.aabb) updateAABB(b); continue; }
+    if (b.type==='rigid') {
+      b.vel.y-=G; b.vel.x*=LIN_DAMP; b.vel.z*=LIN_DAMP;
+      b.pos.x+=b.vel.x; b.pos.y+=b.vel.y; b.pos.z+=b.vel.z;
+      integrateRotation(b);
+      b.angVel.x*=ANG_DAMP; b.angVel.y*=ANG_DAMP; b.angVel.z*=ANG_DAMP;
+      b.onFloor=false;
+      updateAABB(b);
+    }
+  }
+
+  // ── Soft clusters: gravity + floor ───────────────────────────
+  for (const c of S.clusters) {
+    if (c.sleeping) continue;
+    c.vel.y-=G; c.vel.x*=LIN_DAMP; c.vel.z*=LIN_DAMP;
+    c.pos.x+=c.vel.x; c.pos.y+=c.vel.y; c.pos.z+=c.vel.z;
+    // Floor: use bottomOffset so the actual lowest voxel hits y=0
+    const worldBottom=c.pos.y+c.bottomOffset;
+    if (worldBottom<0) {
+      c.pos.y-=worldBottom;
+      if (c.vel.y<0) {
+        const speed=Math.abs(c.vel.y);
+        const e=lookupFloorE(c.mat, speed);
+        c.vel.y=speed*e<0.04?0:speed*e;
+        const fric=1-lookupFricFloor(c.mat);
+        c.vel.x*=fric; c.vel.z*=fric;
+      }
+      c.onFloor=true;
+    } else { c.onFloor=false; c.floorTicks=0; }
+    // Sleep (v0.3.2 — the flag and the gate existed in v0.3.1, the
+    // trigger didn't; clusters never actually slept). Same thresholds
+    // as rigid bodies. solveConstraints() wakes a sleeping cluster if
+    // a spring actually pulls on it, so this doesn't fight the
+    // constraint network — see the wake call there.
+    const spd=Math.hypot(c.vel.x,c.vel.y,c.vel.z);
+    if (c.onFloor&&spd<SLEEP_V) {
+      if (++c.floorTicks>SLEEP_T) {
+        c.sleeping=true;
+        c.vel.x=c.vel.y=c.vel.z=0;
+      }
+    } else if (!c.onFloor) { c.floorTicks=0; }
+  }
+
+  // ── Constraint spring solver ──────────────────────────────────
+  if (S.constraints.length) solveConstraints();
+
+  // ── Attachment point solver (v0.3.1) ──────────────────────────
+  if (S.jointLinks.length) solveJointLinks();
+
+  // ── Contacts (v0.5): floor + body–body, solved together ────────
+  // Bodies joined by an attachment point don't collide with each other.
+  for (const b of S.bodies) if (b.type==='rigid'&&!b.sleeping&&!b.static) { const g=floorContact(b); if (g) groups.push(g); }
+  const linked=new Set(S.jointLinks.map(j=>j.aUid<j.bUid?j.aUid+'|'+j.bUid:j.bUid+'|'+j.aUid));
+  for (let i=0;i<S.bodies.length;i++) {
+    const a=S.bodies[i]; if (a.type!=='rigid') continue;
+    for (let j=i+1;j<S.bodies.length;j++) {
+      const b=S.bodies[j]; if (b.type!=='rigid') continue;
+      if (linked.has(a.uid<b.uid?a.uid+'|'+b.uid:b.uid+'|'+a.uid)) continue;
+      const g=pairContact(a,b); if (g) groups.push(g);
+    }
+  }
+  solveAllContacts(groups);
+  for (const b of S.bodies) if (b.type==='rigid'&&!b.sleeping&&!b.static) {
+    if (b.onFloor) { b.angVel.x*=ROLL_DAMP; b.angVel.y*=ROLL_DAMP; b.angVel.z*=ROLL_DAMP; }
+    floorLift(b); updateAABB(b);
+  }
+  for (const b of S.bodies) if (b.type==='rigid') sleepCheck(b);
+
+  // ── Fractures ────────────────────────────────────────────────
+  for (const b of pendingFractures) {
+    const idx=S.bodies.indexOf(b);
+    if (idx===-1) continue;
+    const frags=fractureBody(b);
+    S.bodies.splice(idx,1,...frags);
+  }
+  if (pendingFractures.length) rebuildUI();
+
+  S.tick++; S.simTime+=1/60;
+}
+
+
+// ════════════════════════════════════════════════════════════════
+//  RENDERER
+// ════════════════════════════════════════════════════════════════
+const cv  = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+
+function resizeCv() {
+  const wrap=document.getElementById('cwrap');
+  cv.width=wrap.clientWidth; cv.height=wrap.clientHeight;
+  OX=cv.width*0.5; OY=cv.height*0.72;
+  CELL=Math.max(1,Math.min(cv.width,cv.height)/60*S.cam.zoom);
+  _render();
+}
+
+let _rafPending=false;
+function render() { if (!_rafPending) { _rafPending=true; requestAnimationFrame(_render); } }
+
+function _render() {
+  _rafPending=false;
+  const W=cv.width,H=cv.height;
+  ctx.fillStyle='#0b0a0f'; ctx.fillRect(0,0,W,H);
+  document.getElementById('hint').style.display=S.bodies.length?'none':'block';
+  if (!S.bodies.length) return;
+  CELL=Math.max(1,Math.min(W,H)/60*S.cam.zoom);
+  drawFloor();
+
+  const all=[];
+
+  // ── Rigid + buoyant surface voxels ──
+  for (let bi=0;bi<S.bodies.length;bi++) {
+    const b=S.bodies[bi];
+    if (b.type==='soft') continue;
+    const {x:px,y:py,z:pz}=b.pos, {x:rx,y:ry,z:rz}=b.rot;
+    const {x:cx,y:cy,z:cz}=b.com;
+    const sel=(bi===S.selected);
+    for (const sv of b.surf) {
+      const [lx,ly,lz]=rotVec(sv.lx-cx,sv.ly-cy,sv.lz-cz,rx,ry,rz);
+      const wx=px+lx,wy=py+ly,wz=pz+lz;
+      all.push({wx,wy,wz,sv,b,sel,sleeping:b.sleeping,brot:{x:rx,y:ry,z:rz}});
+    }
+  }
+
+  // ── Soft body surface voxels (cluster-offset positions) ──
+  for (let bi=0;bi<S.bodies.length;bi++) {
+    const b=S.bodies[bi];
+    if (b.type!=='soft') continue;
+    const sel=(bi===S.selected);
+    for (const c of b.clusters) {
+      for (const sv of c.voxels) {
+        // World position = cluster world COM + voxel offset from cluster local COM
+        const wx=c.pos.x+(sv.lx-c.com.x);
+        const wy=c.pos.y+(sv.ly-c.com.y);
+        const wz=c.pos.z+(sv.lz-c.com.z);
+        all.push({wx,wy,wz,sv,b,sel,sleeping:false,brot:{x:0,y:0,z:0}});
+      }
+    }
+  }
+
+  for (const v of all) v.depth=depthOf(v.wx,v.wy,v.wz);
+  all.sort((a,b_)=>b_.depth-a.depth);
+
+  for (const v of all) {
+    const {wx,wy,wz,sv,b,sel,sleeping,brot}=v;
+    const col=(b.model.materials[sv.mat]||MAT[sv.mat]).color||'#888';
+    const sleepDim=sleeping?-0.28:0;
+    const selBoost=sel?0.14:0;
+    const P=(dx,dy,dz)=>{
+      const [cx_,cy_,cz_]=rotVec(dx,dy,dz,brot.x,brot.y,brot.z);
+      return projectPt(wx+cx_,wy+cy_,wz+cz_);
+    };
+    const p000=P(0,0,0),p100=P(1,0,0),p010=P(0,1,0),p110=P(1,1,0);
+    const p001=P(0,0,1),p101=P(1,0,1),p011=P(0,1,1),p111=P(1,1,1);
+    const drawFace=(bright,pts)=>{
+      ctx.fillStyle=adjColor(col,bright+selBoost+sleepDim);
+      ctx.beginPath(); ctx.moveTo(pts[0].sx,pts[0].sy);
+      for (let k=1;k<pts.length;k++) ctx.lineTo(pts[k].sx,pts[k].sy);
+      ctx.closePath(); ctx.fill();
+    };
+    // Use body's cached ownGrid for face culling (soft: static approx, valid for small deform)
+    const m=b.model,{lx:vx,ly:vy,lz:vz}=sv;
+    if (!ownedAt(m,b.ownGrid,vx, vy+1,vz  )) drawFace( 0.30,[p010,p110,p111,p011]);
+    if (!ownedAt(m,b.ownGrid,vx-1,vy, vz  )) drawFace( 0.10,[p000,p010,p011,p001]);
+    if (!ownedAt(m,b.ownGrid,vx, vy, vz-1 )) drawFace( 0.15,[p000,p100,p110,p010]);
+    if (!ownedAt(m,b.ownGrid,vx+1,vy, vz  )) drawFace( 0.00,[p100,p110,p111,p101]);
+    if (!ownedAt(m,b.ownGrid,vx, vy, vz+1 )) drawFace(-0.20,[p001,p101,p111,p011]);
+    if (!ownedAt(m,b.ownGrid,vx, vy-1,vz  )) drawFace(-0.40,[p000,p100,p101,p001]);
+  }
+
+  // ── Debug: cluster centres + constraint edges ──
+  if (S.debug) {
+    ctx.fillStyle='rgba(74,184,200,0.85)';
+    for (const c of S.clusters) {
+      const p=projectPt(c.pos.x,c.pos.y,c.pos.z);
+      ctx.beginPath(); ctx.arc(p.sx,p.sy,2.5,0,Math.PI*2); ctx.fill();
+    }
+    ctx.strokeStyle='rgba(74,184,200,0.25)'; ctx.lineWidth=1;
+    for (const con of S.constraints) {
+      const p1=projectPt(con.c1.pos.x,con.c1.pos.y,con.c1.pos.z);
+      const p2=projectPt(con.c2.pos.x,con.c2.pos.y,con.c2.pos.z);
+      ctx.beginPath(); ctx.moveTo(p1.sx,p1.sy); ctx.lineTo(p2.sx,p2.sy); ctx.stroke();
+    }
+    // Attachment points (v0.3.1) — both resolved anchors + connecting
+    // line, colored by type. Same palette as Slice of Life's panel.
+    for (const jl of S.jointLinks) {
+      const a=bodyByUid(jl.aUid), b=bodyByUid(jl.bUid);
+      if (!a||!b) continue;
+      const [ax,ay,az]=rotVec(jl.anchorA.x,jl.anchorA.y,jl.anchorA.z,a.rot.x,a.rot.y,a.rot.z);
+      const [bx,by,bz]=rotVec(jl.anchorB.x,jl.anchorB.y,jl.anchorB.z,b.rot.x,b.rot.y,b.rot.z);
+      const p1=projectPt(a.pos.x+ax,a.pos.y+ay,a.pos.z+az);
+      const p2=projectPt(b.pos.x+bx,b.pos.y+by,b.pos.z+bz);
+      const col=JOINT_COLORS[jl.type]||JOINT_COLORS.hinge;
+      ctx.strokeStyle=col; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.moveTo(p1.sx,p1.sy); ctx.lineTo(p2.sx,p2.sy); ctx.stroke();
+      ctx.fillStyle=col;
+      ctx.beginPath(); ctx.arc(p1.sx,p1.sy,3,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(p2.sx,p2.sy,3,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='rgba(0,0,0,.7)'; ctx.font='8px monospace';
+      ctx.fillText(jl.name,(p1.sx+p2.sx)/2+5,(p1.sy+p2.sy)/2-5);
+      ctx.fillStyle='#fff';
+      ctx.fillText(jl.name,(p1.sx+p2.sx)/2+5,(p1.sy+p2.sy)/2-6);
+    }
+  }
+  // v0.6: flick aim line
+  if (S.aim) {
+    ctx.strokeStyle='rgba(232,160,64,.85)'; ctx.lineWidth=2; ctx.setLineDash([6,5]);
+    ctx.beginPath(); ctx.moveTo(S.aim.x0,S.aim.y0); ctx.lineTo(S.aim.x1,S.aim.y1); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle='rgba(232,160,64,.9)'; ctx.beginPath(); ctx.arc(S.aim.x0,S.aim.y0,4,0,Math.PI*2); ctx.fill();
+  }
+}
+
+function drawFloor() {
+  const R=48,STEP=8;
+  ctx.strokeStyle='rgba(42,38,64,0.9)'; ctx.lineWidth=0.5;
+  for (let i=-R;i<=R;i+=STEP) {
+    const a=projectPt(i,0,-R),b_=projectPt(i,0,R);
+    ctx.beginPath(); ctx.moveTo(a.sx,a.sy); ctx.lineTo(b_.sx,b_.sy); ctx.stroke();
+    const c=projectPt(-R,0,i),d=projectPt(R,0,i);
+    ctx.beginPath(); ctx.moveTo(c.sx,c.sy); ctx.lineTo(d.sx,d.sy); ctx.stroke();
+  }
+  ctx.strokeStyle='rgba(200,155,74,0.18)';
+  const o=projectPt(0,0,0),ax_=projectPt(20,0,0),az_=projectPt(0,0,20);
+  ctx.beginPath(); ctx.moveTo(o.sx,o.sy); ctx.lineTo(ax_.sx,ax_.sy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(o.sx,o.sy); ctx.lineTo(az_.sx,az_.sy); ctx.stroke();
+}
+
+// ════════════════════════════════════════════════════════════════
+//  MAIN LOOP
+// ════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════
+//  CONTROLS (v0.6) — what makes a cartridge playable
+//  roll    Space (and a tap on empty ground in the player): throw every
+//          loose rigid body up with a random spin
+//  flick   drag from a body and let go: it's thrown along the drag
+//  readout when everything that was moving comes to rest, count the pips
+//          on each body's upward face (holes in the top layer of voxels)
+//          and show the total. Any voxel die works, nothing is hard-coded.
+//  The settings travel with a .soga / cartridge.
+// ════════════════════════════════════════════════════════════════
+const CONTROL_DEFAULTS={ roll:true, flick:true, readout:true };
+S.controls={ ...CONTROL_DEFAULTS };
+function dynamicBodies(){ return S.bodies.filter(b=>b.type==='rigid'&&!b.static); }
+function wakeBody(b){ b.sleeping=false; b.floorTicks=0; }
+function startRunning(){ if (!S.running&&S.bodies.length) togglePlay(); }
+function gaussRand(){ let u=0; while(!u) u=Math.random(); return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*Math.random()); }
+function randomRotation(){ // uniform on SO(3): normalised 4-D Gaussian quaternion
+  let w=gaussRand(), x=gaussRand(), y=gaussRand(), z=gaussRand(); const n=Math.hypot(w,x,y,z); w/=n; x/=n; y/=n; z/=n;
+  return [1-2*(y*y+z*z),2*(x*y-w*z),2*(x*z+w*y), 2*(x*y+w*z),1-2*(x*x+z*z),2*(y*z-w*x), 2*(x*z-w*y),2*(y*z+w*x),1-2*(x*x+y*y)];
+}
+function bodyRadius(b){ let r=0; for (const k of b.corners) { const d=Math.hypot(k[0],k[1],k[2]); if (d>r) r=d; } return r; }
+function rollAll(){
+  const B=dynamicBodies(); if (!B.length) return;
+  const placed=[];
+  for (const b of B) {
+    wakeBody(b);
+    // Pick the die up and shake it: a fresh uniformly random orientation, lifted
+    // clear of the floor and of the dice already in the hand. Without this the
+    // result remembers the starting face — measured over 1000 dice from the demo
+    // start, chi² was 52-69 (the up face won ~22%); with it, see tests/controls.mjs.
+    b.R=randomRotation(); syncEuler(b);
+    const r=bodyRadius(b);
+    b.pos.y=Math.max(b.pos.y, r+0.05);
+    for (const o of placed) {
+      const dx=b.pos.x-o.b.pos.x, dz=b.pos.z-o.b.pos.z, need=r+o.r+0.05;
+      if (dx*dx+dz*dz<need*need && Math.abs(b.pos.y-o.b.pos.y)<need) b.pos.y=o.b.pos.y+need;
+    }
+    placed.push({b,r});
+    if (typeof updateAABB==='function') updateAABB(b);
+    b.vel={ x:(Math.random()-.5)*.16, y:.30+Math.random()*.16, z:(Math.random()-.5)*.16 };
+    b.angVel={ x:(Math.random()-.5)*1.2, y:(Math.random()-.5)*1.2, z:(Math.random()-.5)*1.2 };
+  }
+  S.result=null; S.resultShown=false; showResult(null);
+  startRunning();
+}
+function canvasPt(cx,cy){ const r=cv.getBoundingClientRect(); return { x:(cx-r.left)*cv.width/r.width, y:(cy-r.top)*cv.height/r.height }; }
+function pickBody(px,py){
+  let best=null, bd=Infinity;
+  for (const b of dynamicBodies()) {
+    const p=projectPt(b.pos.x,b.pos.y,b.pos.z);
+    let rmax=0; for (const k of b.corners) { const d=Math.hypot(k[0],k[1],k[2]); if (d>rmax) rmax=d; }
+    const d=Math.hypot(p.sx-px,p.sy-py);
+    if (d<rmax*CELL*0.8&&d<bd) { bd=d; best=b; }
+  }
+  return best;
+}
+// Screen drag (pixels) → a throw in world space, using the camera's own axes
+function flickBody(b,dx,dy){
+  const cY=Math.cos(S.cam.rotY), sY=Math.sin(S.cam.rotY), cX=Math.cos(S.cam.rotX), sX=Math.sin(S.cam.rotX);
+  const right=[cY,0,sY], up=[sY*sX,cX,-cY*sX];
+  const k=0.012/CELL;                          // 0.012 voxels/tick per voxel of drag
+  let v=[(right[0]*dx-up[0]*dy)*k, (right[1]*dx-up[1]*dy)*k, (right[2]*dx-up[2]*dy)*k];
+  const m=Math.hypot(...v), MAX=0.7; if (m>MAX) v=v.map(x=>x*MAX/m);
+  wakeBody(b);
+  b.vel={ x:b.vel.x+v[0], y:b.vel.y+v[1]+0.12, z:b.vel.z+v[2] };
+  // spin about the axis perpendicular to the throw, like a die leaving the hand
+  const ax=[v[2],0,-v[0]];
+  b.angVel={ x:b.angVel.x+ax[0]*1.4+(Math.random()-.5)*.1, y:b.angVel.y+(Math.random()-.5)*.2, z:b.angVel.z+ax[2]*1.4+(Math.random()-.5)*.1 };
+  S.result=null; S.resultShown=false; showResult(null);
+  startRunning();
+}
+// Pips: holes in the outer layer of whichever face points up
+function pipsUp(b){
+  const R=ensureR(b), up=[R[3],R[4],R[5]];          // world up, in the body's own axes
+  let ax=0; if (Math.abs(up[1])>Math.abs(up[ax])) ax=1; if (Math.abs(up[2])>Math.abs(up[ax])) ax=2;
+  if (Math.abs(up[ax])<0.9) return 0;               // not resting on a face
+  const lo=[Infinity,Infinity,Infinity], hi=[-Infinity,-Infinity,-Infinity];
+  for (const v of b.voxels) { const c=[v.lx,v.ly,v.lz]; for (let i=0;i<3;i++) { if (c[i]<lo[i]) lo[i]=c[i]; if (c[i]>hi[i]) hi[i]=c[i]; } }
+  const layer=up[ax]>0?hi[ax]:lo[ax], [u,w]=[0,1,2].filter(i=>i!==ax);
+  const W=hi[u]-lo[u]+1, H=hi[w]-lo[w]+1, seen=new Uint8Array(W*H);
+  const empty=(i,j)=>{ const c=[0,0,0]; c[ax]=layer; c[u]=lo[u]+i; c[w]=lo[w]+j; return !bodyOcc(b,c[0],c[1],c[2]); };
+  let pips=0;
+  for (let i=0;i<W;i++) for (let j=0;j<H;j++) {
+    if (seen[i*H+j]||!empty(i,j)) continue;
+    let edge=false; const st=[[i,j]]; seen[i*H+j]=1;
+    while (st.length) { const [a,c]=st.pop(); if (a===0||c===0||a===W-1||c===H-1) edge=true;
+      for (const [da,dc] of [[1,0],[-1,0],[0,1],[0,-1]]) { const na=a+da, nc=c+dc;
+        if (na<0||nc<0||na>=W||nc>=H||seen[na*H+nc]||!empty(na,nc)) continue; seen[na*H+nc]=1; st.push([na,nc]); } }
+    if (!edge) pips++;                              // an enclosed hole = one pip
+  }
+  return pips;
+}
+function showResult(text){
+  const el=document.getElementById('roll-hud'); if (!el) return;
+  el.textContent=text||''; el.style.display=text?'block':'none';
+}
+// Called every frame: when everything that was moving is at rest, read the dice
+function checkResult(){
+  if (!S.controls.readout||S.resultShown||!S.running) return;
+  const B=dynamicBodies(); if (!B.length||B.some(b=>!b.sleeping)) return;
+  const v=B.map(pipsUp).filter(n=>n>0);
+  S.resultShown=true;
+  if (!v.length) return;
+  S.result=v; const g=v.map(n=>'⚀⚁⚂⚃⚄⚅'[n-1]||'').join(' '); // each die's own face
+  showResult(v.length>1?`${g}   ${v.join(' + ')} = ${v.reduce((a,b)=>a+b,0)}`:`${g}  ${v[0]}`);
+}
+addEventListener('keydown',e=>{
+  if (e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA') return;
+  if (e.code==='Space'&&S.controls.roll) { e.preventDefault(); rollAll(); }
+  else if (e.key==='r'||e.key==='R') { resetSim(); S.resultShown=false; showResult(null); }
+});
+
+// v0.4: fixed 60 Hz physics regardless of display refresh rate
+let _lastT=null, _acc=0;
+function loop(now) {
+  if (S.running) {
+    if (_lastT===null) _lastT=now;
+    _acc+=Math.min(100,(now-_lastT)); _lastT=now;
+    let n=0; while (_acc>=1000/60 && n<4) { physTick(); _acc-=1000/60; n++; }
+    if (n) { _render(); updateStats(); checkResult(); }
+  } else { _lastT=null; _acc=0; }
+  requestAnimationFrame(loop);
+}
+
+function togglePlay() {
+  if (!S.bodies.length) return;
+  S.running=!S.running;
+  const btn=document.getElementById('btn-play');
+  btn.textContent=S.running?'⏸ PAUSE':'▶ PLAY';
+  btn.classList.toggle('on',S.running);
+  if (!S.running) render();
+}
+
+function stepOnce() {
+  if (!S.bodies.length||S.running) return;
+  physTick(); _render(); updateStats();
+}
+
+function toggleDebug() {
+  S.debug=!S.debug;
+  document.getElementById('btn-debug').classList.toggle('on',S.debug);
+  render();
+}
+
+function resetSim() {
+  S.running=false; resetWarm(); S.result=null; S.resultShown=false; showResult(null);
+  if (S.playback) S.playback.frame=0;
+  const btn=document.getElementById('btn-play');
+  btn.textContent='▶ PLAY'; btn.classList.remove('on');
+  if (S.orig) {
+    // Restore rigid/buoyant bodies from saved state; soft bodies are rebuilt
+    S.bodies=S.orig.map(ob=>({
+      ...ob,
+      voxels:ob.voxels, surf:ob.surf, model:ob.model,
+      com:{...ob.com}, pos:{...ob.pos}, vel:{...ob.vel},
+      rot:{...ob.rot}, angVel:{...ob.angVel}, R:null,
+      aabb:null, onFloor:false, floorTicks:0, sleeping:false,
+      // Soft body cluster/constraint refs need rebuild — handled below
+      clusters: ob.type==='soft'?[]:undefined,
+      constraints: ob.type==='soft'?[]:undefined,
+    }));
+    // Re-attach clusters/constraints for any soft bodies in orig
+    S.clusters=[]; S.constraints=[];
+    for (let bi=0;bi<S.bodies.length;bi++) {
+      const b=S.bodies[bi];
+      if (b.type!=='soft') continue;
+      const inst=S.instances.find((_,i)=>true)||{x:0,y:0,z:0}; // use first instance as fallback
+      const sc=buildSoftClusters(b, {x:b.pos.x-b.com.x, y:b.pos.y-b.com.y, z:b.pos.z-b.com.z});
+      b.clusters=sc.clusters; b.constraints=sc.constraints;
+      S.clusters.push(...sc.clusters); S.constraints.push(...sc.constraints);
+    }
+  }
+  S.tick=0; S.simTime=0;
+  // Attachment points reference bodies by uid, which {...ob} above
+  // preserved — a fresh deep-ish copy of the snapshot is enough to
+  // restore them; no re-resolution against geometry needed.
+  S.jointLinks = (S.origJointLinks||[]).map(jl=>({
+    ...jl, axis:[...jl.axis], anchorA:{...jl.anchorA}, anchorB:{...jl.anchorB},
+  }));
+  _render(); updateStats(); rebuildUI();
+}
+
+function saveOrig() {
+  S.orig=S.bodies.map(b=>({
+    ...b,
+    voxels:b.voxels.map(v=>({...v})),
+    surf:b.surf.map(v=>({...v})),
+    com:{...b.com}, pos:{...b.pos}, vel:{...b.vel},
+    rot:{...b.rot}, angVel:{...b.angVel}, R:null,
+  }));
+  S.origJointLinks = S.jointLinks.map(jl=>({
+    ...jl, axis:[...jl.axis], anchorA:{...jl.anchorA}, anchorB:{...jl.anchorB},
+  }));
+}
+
+// ════════════════════════════════════════════════════════════════
+//  FILE LOADERS
+// ════════════════════════════════════════════════════════════════
+function onLoadSoli(evt) {
+  const file=evt.target.files[0]; if (!file) return;
+  const r=new FileReader();
+  r.onload=e=>{
+    try {
+      const model=parseSoli(e.target.result,file.name);
+      loadScene([model],[{id:0,modelIdx:0,x:0,y:35,z:0,rotX:0,rotY:0,rotZ:0}],[]);
+    } catch(err) { alert('Error loading .soli:\n'+err.message); }
+  };
+  r.readAsText(file); evt.target.value='';
+}
+
+// ── Terrain (v0.5): Slice Studio's terrain voxels become one static stone
+// body: 1×1×1 blocks at world y 0..1, with real contact physics.
+function buildTerrainBody() {
+  const T=S.terrain||[]; if (!T.length) return;
+  let x0=Infinity,x1=-Infinity,z0=Infinity,z1=-Infinity;
+  for (const [x,z] of T) { if (x<x0)x0=x; if (x>x1)x1=x; if (z<z0)z0=z; if (z>z1)z1=z; }
+  const RX=x1-x0+1, RY=1, RZ=z1-z0+1, voxels=new Uint8Array(RX*RY*RZ);
+  for (const [x,z] of T) voxels[(x-x0)+(z-z0)*RX*RY]=STONE;
+  const model={ name:'terrain', RX, RY, RZ, voxels, materials:MAT.map(m=>({...m})), raw:null };
+  const visited=new Uint8Array(RX*RY*RZ), comp=[];
+  for (let i=0;i<voxels.length;i++) if (voxels[i]) comp.push({ lx:i%RX, ly:0, lz:Math.floor(i/(RX*RY)), mat:STONE });
+  const phys=computeBodyPhys(model,comp,true);
+  const place=instancePlacer({ x:x0+RX/2, y:0, z:z0+RZ/2 }, model);   // same placement path as every instance
+  S.bodies.push({
+    name:'terrain', model, type:'rigid', uid:nextBodyUid++, static:true,
+    voxels:comp, surf:phys.surf, ownGrid:phys.ownGrid,
+    com:phys.com, mass:phys.mass, elast:phys.elast, I:phys.I, Ib:phys.Ib, IbInv:phys.IbInv, corners:phys.corners,
+    dominantMat:STONE, fractureMat:null,
+    pos:place(phys.com),
+    vel:{x:0,y:0,z:0}, rot:{x:0,y:0,z:0}, angVel:{x:0,y:0,z:0},
+    aabb:null, onFloor:true, floorTicks:0, sleeping:false,
+  });
+  updateAABB(S.bodies[S.bodies.length-1]);
+}
+
+// Scene loaded as authored (v0.5: no longer lifted 35 voxels into the air;
+// Studio places models on the ground, and its terrain is solid now).
+function loadScene(models, instances, terrain) {
+  S.models=models; S.instances=instances; S.terrain=terrain||[]; S.result=null; S.resultShown=false; showResult(null);
+  S.playback=null; G=0.028; FLOOR_Y=0;
+  buildBodies(); saveOrig(); _render(); updateStats(); rebuildUI();
+}
+
+// ── .soan (v0.5): animations from Slice and Dice, onto the loaded scene ──
+// Parametric: the initial conditions are replayed through the same physics
+// core Dice previews with, so the result matches. Baked: the recorded
+// frames are played back as they are (kinematic, no simulation).
+function applySoan(d) {
+  if (d.magic!=='SOAN') throw new Error('Not a .soan file');
+  if (!S.models.length) throw new Error('Load the scene (.sost) this animation was made for first');
+  const ph=d.physics||{};
+  if (isFinite(ph.gravity)) G=Math.abs(ph.gravity+100.8)<1e-9?0.028:-ph.gravity/3600;
+  if (isFinite(ph.floor_y)) FLOOR_Y=ph.floor_y;
+  const tracks=d.tracks||[];
+  const byId=new Map(S.instances.map((inst,i)=>[inst.id??i,i]));
+  for (let ti=0;ti<tracks.length;ti++) {
+    const t=tracks[ti], ii=byId.has(t.instance_id)?byId.get(t.instance_id):ti, inst=S.instances[ii];
+    if (!inst) continue;
+    const init=t.initial||{};
+    if (init.position) [inst.x,inst.y,inst.z]=init.position;
+    if (init.rotation) [inst.rotX,inst.rotY,inst.rotZ]=init.rotation;
+    inst.static=t.type==='static';
+    inst._vel=init.velocity||[0,0,0]; inst._ang=init.angular_velocity||[0,0,0];
+    inst._frames=t.frames||null;
+  }
+  if (d.environment?.terrain) S.terrain=d.environment.terrain;
+  buildBodies();
+  // initial velocities, per tick; every body of an instance gets that instance's motion
+  let bi=0;
+  for (let ii=0;ii<S.instances.length;ii++) {
+    const inst=S.instances[ii]; const v=inst._vel||[0,0,0], w=inst._ang||[0,0,0];
+    for (const b of S.bodies) if (b.instIdx===ii&&b.type!=='soft') {
+      b.vel={ x:v[0]/60, y:v[1]/60, z:v[2]/60 }; b.angVel={ x:w[0]/60, y:w[1]/60, z:w[2]/60 };
+    }
+  }
+  S.playback=d.export_mode==='baked'?{ frame:0, total:d.duration_frames||300 }:null;
+  saveOrig(); S.tick=0; S.simTime=0; _render(); updateStats(); rebuildUI();
+}
+// Baked playback: put every body where its instance's recorded pivot puts it
+function playbackTick() {
+  const pb=S.playback; const f=Math.min(pb.frame, pb.total-1);
+  for (let ii=0;ii<S.instances.length;ii++) {
+    const inst=S.instances[ii], fr=inst._frames?.[f]; if (!fr) continue;
+    const model=S.models[inst.modelIdx];
+    const place=instancePlacer({ x:fr[0], y:fr[1], z:fr[2], rotX:fr[3], rotY:fr[4], rotZ:fr[5] }, model);
+    for (const b of S.bodies) if (b.instIdx===ii&&b.type!=='soft') {
+      b.pos=place(b.com); b.rot={ x:fr[3], y:fr[4], z:fr[5] }; b.R=null; updateAABB(b);
+    }
+  }
+  pb.frame++; S.tick++; S.simTime+=1/60;
+}
+
+// ── .soga (v0.5 reads v0.3): the whole scene and its physics state ─────
+function applySoga(d) {
+  if (d.magic!=='SOGA') throw new Error('Not a .soga file');
+  if (!d.instances) throw new Error('This .soga (v'+d.version+') has no instance placement. It was exported by Engine ≤ v0.4; open the scene there and export again from v0.5.');
+  const models=d.models.map(m=>parseSoli(JSON.parse(decodeURIComponent(escape(atob(m.soli_data)))), m.soli_name));
+  loadScene(models, d.instances.map(i=>({...i})), d.environment?.terrain||[]);
+  if (d.scene?.gravity) G=-d.scene.gravity[1]/3600;
+  S.controls={ ...CONTROL_DEFAULTS, ...(d.controls||{}) }; syncControlsUI();
+  S.result=null; S.resultShown=false; showResult(null);
+  if (isFinite(d.scene?.floor_y)) FLOOR_Y=d.scene.floor_y;
+  const st=d.physics_state?.bodies||[];
+  if (st.length===S.bodies.length) {
+    S.bodies.forEach((b,i)=>{ const s_=st[i]; if (!s_||s_.type!==b.type) return;
+      b.pos={x:s_.position[0],y:s_.position[1],z:s_.position[2]};
+      b.vel={x:s_.velocity[0],y:s_.velocity[1],z:s_.velocity[2]};
+      if (b.type!=='soft') { b.rot={x:s_.rotation[0],y:s_.rotation[1],z:s_.rotation[2]}; b.R=null;
+        if (s_.orientation?.length===9) { b.R=s_.orientation.slice(); b._rx=b.rot.x; b._ry=b.rot.y; b._rz=b.rot.z; }
+        b.angVel={x:s_.angular_velocity[0],y:s_.angular_velocity[1],z:s_.angular_velocity[2]}; }
+      b.sleeping=!!s_.sleeping; b.floorTicks=s_.floor_ticks||0;
+      if (b.type==='soft'&&s_.clusters?.length===b.clusters.length) b.clusters.forEach((c,k)=>{ c.pos={x:s_.clusters[k].pos[0],y:s_.clusters[k].pos[1],z:s_.clusters[k].pos[2]}; c.vel={x:s_.clusters[k].vel[0],y:s_.clusters[k].vel[1],z:s_.clusters[k].vel[2]}; });
+      if (b.type!=='soft') updateAABB(b);
+    });
+  } else console.warn('[soga] body count changed (fracture?) — starting from the scene\'s initial state');
+  S.tick=d.meta?.tick||0; S.simTime=d.meta?.sim_time||0;
+  saveOrig(); _render(); updateStats(); rebuildUI();
+  return d.meta?.title||null;
+}
+
+function readFileAs(evt, fn, what) {
+  const file=evt.target.files[0]; if (!file) return;
+  const r=new FileReader();
+  r.onload=e=>{ try { fn(JSON.parse(e.target.result), file.name); } catch(err) { alert('Error loading '+what+':\n'+err.message); } };
+  r.readAsText(file); evt.target.value='';
+}
+function onLoadSoan(evt) { readFileAs(evt, d=>applySoan(d), '.soan'); }
+function onLoadSoga(evt) { readFileAs(evt, d=>applySoga(d), '.soga'); }
+
+function onLoadSost(evt) {
+  const file=evt.target.files[0]; if (!file) return;
+  const r=new FileReader();
+  r.onload=e=>{
+    try {
+      const {models,instances,terrain}=parseSost(e.target.result);
+      loadScene(models, instances, terrain);
+    } catch(err) { alert('Error loading .sost:\n'+err.message); }
+  };
+  r.readAsText(file); evt.target.value='';
+}
+
+// ════════════════════════════════════════════════════════════════
+//  ⚄ DICE DEMO — v0.2 restored
+// ════════════════════════════════════════════════════════════════
+function makeDie(name) {
+  // v0.6: a 7×7×7 die, so every face's pips are separate holes the engine
+  // can count (the old 6×6×6 die had two touching pips on its 6 face).
+  // Opposite faces sum to 7: 1 top / 6 bottom, 2 / 5 on x, 3 / 4 on z.
+  const R=7,POLY=6;
+  const vox=new Uint8Array(R*R*R).fill(POLY);
+  const VI=(x,y,z)=>x+y*R+z*R*R;
+  const L=1,M=3,H=5;
+  [[M,6,M]].forEach(([x,y,z])=>vox[VI(x,y,z)]=0);                                         // 1
+  [[L,0,L],[L,0,M],[L,0,H],[H,0,L],[H,0,M],[H,0,H]].forEach(([x,y,z])=>vox[VI(x,y,z)]=0);  // 6
+  [[6,L,L],[6,H,H]].forEach(([x,y,z])=>vox[VI(x,y,z)]=0);                                  // 2
+  [[0,L,L],[0,L,H],[0,H,L],[0,H,H],[0,M,M]].forEach(([x,y,z])=>vox[VI(x,y,z)]=0);          // 5
+  [[L,L,6],[M,M,6],[H,H,6]].forEach(([x,y,z])=>vox[VI(x,y,z)]=0);                          // 3
+  [[L,L,0],[L,H,0],[H,L,0],[H,H,0]].forEach(([x,y,z])=>vox[VI(x,y,z)]=0);                  // 4
+  let bin='';
+  for (let i=0;i<vox.length;i+=4096) bin+=String.fromCharCode(...vox.subarray(i,i+4096));
+  const mats=MAT.map(m=>({...m}));
+  const raw={ magic:'SOLI',version:'0.1',resolution:{x:R,y:R,z:R},
+    materials:mats.map(m=>({name:m.name,density:m.density,elasticity:m.elast,color:m.color})),
+    voxels:btoa(bin) };
+  return { name,RX:R,RY:R,RZ:R,voxels:vox,materials:mats,raw };
+}
+
+function diceDemo() {
+  S.terrain=[]; S.playback=null; G=0.028; FLOOR_Y=0; S.result=null; S.resultShown=false; showResult(null);
+  S.running=false;
+  document.getElementById('btn-play').textContent='▶ PLAY';
+  document.getElementById('btn-play').classList.remove('on');
+  S.tick=0; S.simTime=0;
+  S.models=[makeDie('die_1'),makeDie('die_2')];
+  S.instances=[
+    {modelIdx:0,x:-9,y:27,z:-1,rotX:0.3,rotY:0.8,rotZ:0.2},
+    {modelIdx:1,x: 9,y:30,z: 1,rotX:0.7,rotY:0.2,rotZ:0.5},
+  ];
+  buildBodies();
+  if (S.bodies.length>=1) S.bodies[0].angVel={x:0.12,y:0.07,z:0.14};
+  if (S.bodies.length>=2) S.bodies[1].angVel={x:-0.09,y:0.13,z:-0.11};
+  // v0.5: thrown toward each other, so they clatter
+  if (S.bodies.length>=2) { S.bodies[0].vel={x:0.16,y:0,z:0.02}; S.bodies[1].vel={x:-0.16,y:0,z:-0.02}; }
+  saveOrig();
+  S.running=true;
+  document.getElementById('btn-play').textContent='⏸ PAUSE';
+  document.getElementById('btn-play').classList.add('on');
+  _render(); updateStats(); rebuildUI();
+}
+
+// ════════════════════════════════════════════════════════════════
+//  💨 GAS DEMO — v0.2 restored
+// ════════════════════════════════════════════════════════════════
+function makeGasBlob(name) {
+  const R=8,GAS=1;
+  const vox=new Uint8Array(R*R*R);
+  const c=(R-1)/2,rad=R*0.46;
+  for (let z=0;z<R;z++) for (let y=0;y<R;y++) for (let x=0;x<R;x++) {
+    const dx=x-c,dy=y-c,dz=z-c;
+    if (dx*dx+dy*dy+dz*dz<=rad*rad) vox[x+y*R+z*R*R]=GAS;
+  }
+  let bin=''; for (let i=0;i<vox.length;i+=4096) bin+=String.fromCharCode(...vox.subarray(i,i+4096));
+  const mats=MAT.map(m=>({...m}));
+  const raw={ magic:'SOLI',version:'0.1',resolution:{x:R,y:R,z:R},
+    materials:mats.map(m=>({name:m.name,density:m.density,elasticity:m.elast,color:m.color})),
+    voxels:btoa(bin) };
+  return { name,RX:R,RY:R,RZ:R,voxels:vox,materials:mats,raw };
+}
+
+function gasDemo() {
+  S.terrain=[]; S.playback=null; G=0.028; FLOOR_Y=0; S.result=null; S.resultShown=false; showResult(null);
+  S.running=false;
+  document.getElementById('btn-play').textContent='▶ PLAY';
+  document.getElementById('btn-play').classList.remove('on');
+  S.tick=0; S.simTime=0;
+  S.models=[makeGasBlob('gas_blob')];
+  S.instances=[{modelIdx:0,x:0,y:6,z:0,rotX:0,rotY:0,rotZ:0}];
+  buildBodies(); saveOrig();
+  S.running=true;
+  document.getElementById('btn-play').textContent='⏸ PAUSE';
+  document.getElementById('btn-play').classList.add('on');
+  _render(); updateStats(); rebuildUI();
+}
+
+// ════════════════════════════════════════════════════════════════
+//  🫙 JELLY DEMO — v0.3 new (properly encoded)
+// ════════════════════════════════════════════════════════════════
+function makeJellyBlob(name) {
+  const R=8, JELLY=10;   // jelly at index 10 — appended to v0.2 table
+  const vox=new Uint8Array(R*R*R);
+  const c=(R-1)/2, rad=R*0.46;
+  for (let z=0;z<R;z++) for (let y=0;y<R;y++) for (let x=0;x<R;x++) {
+    const dx=x-c,dy=y-c,dz=z-c;
+    if (dx*dx+dy*dy+dz*dz<=rad*rad) vox[x+y*R+z*R*R]=JELLY;
+  }
+  let bin='';
+  for (let i=0;i<vox.length;i+=4096) bin+=String.fromCharCode(...vox.subarray(i,i+4096));
+  const mats=MAT.map(m=>({...m}));
+  const raw={ magic:'SOLI',version:'0.1',resolution:{x:R,y:R,z:R},
+    materials:mats.map(m=>({name:m.name,density:m.density,color:m.color})),
+    voxels:btoa(bin) };
+  return { name,RX:R,RY:R,RZ:R,voxels:vox,materials:mats,raw };
+}
+
+function jellyDemo() {
+  S.terrain=[]; S.playback=null; G=0.028; FLOOR_Y=0; S.result=null; S.resultShown=false; showResult(null);
+  S.running=false;
+  document.getElementById('btn-play').textContent='▶ PLAY';
+  document.getElementById('btn-play').classList.remove('on');
+  S.tick=0; S.simTime=0;
+  S.models=[makeJellyBlob('jelly_blob')];
+  S.instances=[{modelIdx:0,x:0,y:20,z:0,rotX:0.25,rotY:0.4,rotZ:0.15}];
+  buildBodies(); saveOrig();
+  S.running=true;
+  document.getElementById('btn-play').textContent='⏸ PAUSE';
+  document.getElementById('btn-play').classList.add('on');
+  _render(); updateStats(); rebuildUI();
+}
+
+// ════════════════════════════════════════════════════════════════
+//  EXPORT .SOGA
+// ════════════════════════════════════════════════════════════════
+// A model made in code (demos) has no source .soli; build one from its voxels
+function soliFromModel(m) {
+  let bin=''; for (let i=0;i<m.voxels.length;i+=4096) bin+=String.fromCharCode(...m.voxels.subarray(i,i+4096));
+  return { magic:'SOLI', version:'0.1', name:m.name, resolution:{x:m.RX,y:m.RY,z:m.RZ},
+    materials:m.materials.map(x=>({ name:x.name, density:x.density, elasticity:x.elast??0, color:x.color })), voxels:btoa(bin) };
+}
+function exportSoga() {
+  if (!S.bodies.length) { alert('Nothing to export.'); return; }
+  const soga=buildSoga();
+  const blob=new Blob([JSON.stringify(soga,null,2)],{type:'application/octet-stream'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download=`scene-${Date.now()}.soga`; a.click();
+  URL.revokeObjectURL(a.href);
+}
+function buildSoga() {
+  const soga={
+    magic:'SOGA', version:'0.3', created:new Date().toISOString(),
+    scene:{ gravity:[0,-(G*60*60),0], floor_y:FLOOR_Y, bounds:{x:256,y:256,z:256} },
+    models:S.models.map((m,i)=>({ id:`model_${i}`, soli_name:m.name, soli_data:btoa(unescape(encodeURIComponent(JSON.stringify(m.raw||soliFromModel(m))))) })),
+    // v0.3: placement, so the file can be loaded back (and played as a cartridge)
+    instances:S.instances.map(i=>({ id:i.id, modelIdx:i.modelIdx, x:i.x, y:i.y, z:i.z, rotX:i.rotX||0, rotY:i.rotY||0, rotZ:i.rotZ||0, static:!!i.static })),
+    environment:{ terrain:S.terrain||[] },
+    controls:{ ...S.controls },                    // v0.6
+    physics_state:{ bodies:S.bodies.map((b,i)=>({
+      body_index:i, model_name:b.name, type:b.type,
+      dominant_material:MAT[b.dominantMat]?.name||'?',
+      behavior:MAT[b.dominantMat]?.behavior||'?',
+      mass:b.mass, elasticity:b.elast,
+      position:[b.pos.x,b.pos.y,b.pos.z],
+      velocity:[b.vel.x,b.vel.y,b.vel.z],
+      rotation:[b.rot?.x||0,b.rot?.y||0,b.rot?.z||0],
+      angular_velocity:[b.angVel?.x||0,b.angVel?.y||0,b.angVel?.z||0],
+      orientation:b.type!=='soft'?ensureR(b).slice():undefined,   // v0.3: exact matrix, so a resumed game continues bit for bit
+      floor_ticks:b.floorTicks||0,
+      sleeping:b.sleeping,
+      clusters:b.type==='soft'?b.clusters.map(c=>({
+        pos:[c.pos.x,c.pos.y,c.pos.z], vel:[c.vel.x,c.vel.y,c.vel.z],
+      })):[],
+    })) },
+    triggers:[],
+    meta:{ tick:S.tick, sim_time:S.simTime, tool:'SliceWorks Engine v0.6 — ConsciousNode SoftWorks' },
+  };
+  return soga;
+}
+
+// ════════════════════════════════════════════════════════════════
+//  CARTRIDGES (v0.5) — the console
+//  A cartridge is this engine's own page with a .soga baked in and a flag
+//  that boots it as a player: no editor, just the scene, PLAY / RESET and
+//  the camera. The .soga is the ROM; the HTML is the console. The blank
+//  console (sliceworks-player) is the same page with the flag and no ROM:
+//  it asks for a .soga.
+// ════════════════════════════════════════════════════════════════
+function buildCartridgeHTML(title) {
+  const soga=buildSoga();
+  soga.meta.title=title;
+  soga.meta.start_from='initial';           // cartridges boot at the scene's start
+  const json=JSON.stringify(soga).replace(/</g,'\\u003c');   // can't close the <script>
+  const boot=`<script>window.SLICE_PLAYER=true;<\/script>\n<script type="application/json" id="cartridge">${json}<\/script>\n`;
+  const esc=t=>t.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  return ENGINE_SOURCE
+    .replace(/<title>[^<]*<\/title>/, `<title>${esc(title)} — SliceWorks</title>`)
+    .replace('</head>', boot+'</head>');
+}
+function exportCartridge() {
+  if (!S.bodies.length) { alert('Nothing to export.'); return; }
+  const title=(document.getElementById('cart-title').value||'Untitled').trim();
+  if (S.orig) resetSim();                     // the cartridge starts from the scene's initial state
+  const html=buildCartridgeHTML(title);
+  const blob=new Blob([html],{type:'text/html'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=(title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'cartridge')+'.html';
+  a.click(); URL.revokeObjectURL(a.href);
+}
+function controlsHint(){
+  const c=S.controls, parts=[];
+  if (c.roll) parts.push('space or tap: roll');
+  if (c.flick) parts.push('drag a die: flick it');
+  parts.push('drag elsewhere: orbit','scroll: zoom','R: reset');
+  return parts.join(' · ');
+}
+function syncControlsUI(){
+  for (const k of ['roll','flick','readout']) { const el=document.getElementById('ctl-'+k); if (el) el.checked=!!S.controls[k]; }
+  const sub=document.getElementById('player-sub'); if (sub&&document.body.classList.contains('player')) sub.textContent=controlsHint();
+}
+function bootPlayer() {
+  document.body.classList.add('player');
+  const cart=document.getElementById('cartridge');
+  const titleEl=document.getElementById('player-title');
+  if (cart) {
+    try {
+      const d=JSON.parse(cart.textContent);
+      applySoga(d);
+      titleEl.textContent=d.meta?.title||'SliceWorks';
+      document.getElementById('player-insert').style.display='none';
+      syncControlsUI();
+      setTimeout(()=>{ if (!S.running) togglePlay(); }, 400);
+    } catch(err) { titleEl.textContent='Cartridge error: '+err.message; }
+  } else {
+    titleEl.textContent='SliceWorks Player';
+    document.getElementById('player-insert').style.display='flex';
+  }
+}
+function onInsertCartridge(evt) {
+  readFileAs(evt, d=>{
+    applySoga(d);
+    document.getElementById('player-title').textContent=d.meta?.title||'SliceWorks';
+    document.getElementById('player-insert').style.display='none';
+    syncControlsUI();
+    if (!S.running) togglePlay();
+  }, '.soga');
+}
+
+// ════════════════════════════════════════════════════════════════
+//  UI
+// ════════════════════════════════════════════════════════════════
+function switchTab(name) {
+  document.querySelectorAll('.tab' ).forEach(t=>t.classList.toggle('act',t.dataset.t===name));
+  document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('act',p.id===`pane-${name}`));
+}
+
+function rebuildUI() {
+  const el=document.getElementById('body-list');
+  if (!S.bodies.length) {
+    el.innerHTML='<div style="font-size:9px;color:var(--muted);padding:4px 0">No bodies detected.</div>';
+  } else {
+    el.innerHTML=S.bodies.map((b,i)=>{
+      const matName=b.type==='buoyant'?'gas &middot; buoyant'
+        :b.type==='soft'?`${MAT[b.dominantMat].name} &middot; ${b.clusters.length} clusters`
+        :MAT[b.dominantMat].name;
+      return `<div class="bi ${i===S.selected?'sel':''} ${b.type==='soft'?'soft':''}" onclick="selectBody(${i})">
+        <div class="bn">${b.name} #${i} &middot; ${matName}</div>
+        <div class="bd">${b.voxels.length}v &middot; ${b.mass.toFixed(1)}g${b.sleeping?' &middot; \uD83D\uDCA4':''}</div>
+      </div>`;
+    }).join('');
+  }
+  populateMatList();
+  updateStats();
+}
+
+function populateMatList() {
+  const el=document.getElementById('mat-list'); if (!el) return;
+  el.innerHTML=MAT.map((m,i)=>{
+    if (m.behavior==='none') return '';
+    const swatch=m.color?`<span style="display:inline-block;width:8px;height:8px;background:${m.color};margin-right:4px;vertical-align:-1px"></span>`:'';
+    const note=m.fractureVelocity!=null?`fractures &gt;${m.fractureVelocity} &middot; ${m.fractureFragments}pcs`
+      :m.behavior==='ductile'?'bends, never breaks'
+      :m.behavior==='elastic'?'always bouncy'
+      :m.behavior==='buoyant'?'rises, no collision'
+      :m.behavior==='soft-deform'?`k=${m.stiffness} damp=${m.damping}`
+      :'future v0.4';
+    return `<div class="bi">
+      <div class="bn">${swatch}${m.name} <span style="color:var(--muted)">&middot; ${m.behavior}</span> <span style="color:var(--bdr)">[${i}]</span></div>
+      <div class="bd">d=${m.density}${m.friction!=null?` &middot; &mu;=${m.friction}`:''}</div>
+      <div class="bd" style="color:var(--teal)">${note}</div>
+    </div>`;
+  }).join('');
+}
+
+function selectBody(i) { S.selected=(S.selected===i)?null:i; rebuildUI(); render(); }
+
+function updateStats() {
+  const awake=S.bodies.filter(b=>!b.sleeping).length;
+  document.getElementById('st-tick'   ).textContent=S.tick;
+  document.getElementById('st-bodies' ).textContent=S.bodies.length;
+  document.getElementById('st-awake'  ).textContent=awake;
+  document.getElementById('st-clusters').textContent=S.clusters.length;
+  document.getElementById('st-joints' ).textContent=S.jointLinks.length;
+  document.getElementById('st-sim'    ).textContent=S.simTime.toFixed(2);
+  const jointRows=S.jointLinks.map(jl=>{
+    const a=bodyByUid(jl.aUid), b=bodyByUid(jl.bUid);
+    const status=(a&&b)?`${a.name}&harr;${b.name}`:'<span style="color:#cc6666">orphaned</span>';
+    return `<div class="sr"><span class="sk">${jl.name} <span style="color:${JOINT_COLORS[jl.type]}">[${jl.type}]</span></span><span class="sv">${status}</span></div>`;
+  }).join('');
+  document.getElementById('phys-stats').innerHTML=`
+    <div class="sr"><span class="sk">Tick</span><span class="sv">${S.tick}</span></div>
+    <div class="sr"><span class="sk">Sim time</span><span class="sv">${S.simTime.toFixed(2)}s</span></div>
+    <div class="sr"><span class="sk">Bodies</span><span class="sv">${S.bodies.length}</span></div>
+    <div class="sr"><span class="sk">Awake</span><span class="sv">${awake}</span></div>
+    <div class="sr"><span class="sk">Sleeping</span><span class="sv">${S.bodies.length-awake}</span></div>
+    <div class="sr"><span class="sk">Clusters</span><span class="sv">${S.clusters.length}</span></div>
+    <div class="sr"><span class="sk">Constraints</span><span class="sv">${S.constraints.length}</span></div>
+    <div class="sr"><span class="sk">Joint links</span><span class="sv">${S.jointLinks.length}</span></div>
+    ${jointRows}`;
+}
+
+// ════════════════════════════════════════════════════════════════
+//  CAMERA CONTROLS
+// ════════════════════════════════════════════════════════════════
+const clamp=(v,lo,hi)=>v<lo?lo:v>hi?hi:v;
+
+cv.addEventListener('mousedown',e=>{
+  e.preventDefault();
+  if (e.button===0&&S.controls.flick) {
+    const p=canvasPt(e.clientX,e.clientY), b=pickBody(p.x,p.y);
+    if (b) { S.drag={type:'flick',body:b,x:e.clientX,y:e.clientY,p0:p}; S.aim={x0:p.x,y0:p.y,x1:p.x,y1:p.y}; return; }
+  }
+  S.drag={type:e.button===2?'pan':'orbit',x:e.clientX,y:e.clientY,cam:{...S.cam},moved:false};
+  cv.classList.add('g');
+});
+cv.addEventListener('mousemove',e=>{
+  if (!S.drag) return;
+  const dx=e.clientX-S.drag.x,dy=e.clientY-S.drag.y;
+  if (Math.abs(dx)+Math.abs(dy)>4) S.drag.moved=true;
+  if (S.drag.type==='flick') { const p=canvasPt(e.clientX,e.clientY); S.aim.x1=p.x; S.aim.y1=p.y; if (!S.running) render(); return; }
+  if (S.drag.type==='orbit') {
+    S.cam.rotY=S.drag.cam.rotY-dx*0.005;
+    S.cam.rotX=clamp(S.drag.cam.rotX+dy*0.005,-Math.PI/2+0.1,Math.PI/6);
+  } else { S.cam.panX=S.drag.cam.panX+dx; S.cam.panY=S.drag.cam.panY+dy; }
+  if (!S.running) render();
+});
+function endDrag(cx,cy){
+  const d=S.drag; S.drag=null; cv.classList.remove('g');
+  if (!d) return;
+  if (d.type==='flick') { const p=canvasPt(cx,cy); S.aim=null; flickBody(d.body,p.x-d.p0.x,p.y-d.p0.y); return; }
+  if (d.type==='orbit'&&!d.moved&&document.body.classList.contains('player')&&S.controls.roll) rollAll();   // tap on empty ground
+}
+cv.addEventListener('mouseup',e=>endDrag(e.clientX,e.clientY));
+cv.addEventListener('mouseleave',()=>{ if (S.drag?.type==='flick') { S.aim=null; render(); } S.drag=null; cv.classList.remove('g'); });
+cv.addEventListener('wheel',e=>{
+  e.preventDefault();
+  S.cam.zoom=clamp(S.cam.zoom*(e.deltaY>0?0.90:1.11),0.1,8);
+  CELL=Math.max(1,Math.min(cv.width,cv.height)/60*S.cam.zoom);
+  if (!S.running) render();
+},{passive:false});
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+
+// Touch
+cv.addEventListener('touchstart',e=>{
+  e.preventDefault();
+  S.touches=[...e.touches];
+  if (e.touches.length===1) {
+    const t=e.touches[0], p=canvasPt(t.clientX,t.clientY), b=S.controls.flick?pickBody(p.x,p.y):null;
+    S.drag=b?{type:'flick',body:b,x:t.clientX,y:t.clientY,p0:p,lx:t.clientX,ly:t.clientY}
+            :{type:'orbit',x:t.clientX,y:t.clientY,cam:{...S.cam},moved:false,lx:t.clientX,ly:t.clientY};
+    if (b) S.aim={x0:p.x,y0:p.y,x1:p.x,y1:p.y};
+  } else if (S.drag?.type==='flick') { S.aim=null; S.drag=null; }
+},{passive:false});
+cv.addEventListener('touchmove',e=>{
+  e.preventDefault();
+  if (e.touches.length===1&&S.drag) {
+    const dx=e.touches[0].clientX-S.drag.x,dy=e.touches[0].clientY-S.drag.y;
+    S.drag.lx=e.touches[0].clientX; S.drag.ly=e.touches[0].clientY;
+    if (Math.abs(dx)+Math.abs(dy)>6) S.drag.moved=true;
+    if (S.drag.type==='flick') { const p=canvasPt(S.drag.lx,S.drag.ly); S.aim.x1=p.x; S.aim.y1=p.y; if (!S.running) render(); return; }
+    S.cam.rotY=S.drag.cam.rotY-dx*0.005;
+    S.cam.rotX=clamp(S.drag.cam.rotX+dy*0.005,-Math.PI/2+0.1,Math.PI/6);
+    if (!S.running) render();
+  } else if (e.touches.length===2&&S.touches.length===2) {
+    const d0=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+    const d1=Math.hypot(S.touches[0].clientX-S.touches[1].clientX,S.touches[0].clientY-S.touches[1].clientY);
+    if (d1) S.cam.zoom=clamp(S.cam.zoom*(d0/d1),0.1,8);
+    S.touches=[...e.touches];
+    if (!S.running) render();
+  }
+},{passive:false});
+cv.addEventListener('touchend',()=>{ const d=S.drag; S.touches=[]; if (d) endDrag(d.lx??d.x, d.ly??d.y); else S.drag=null; });
+
+// ════════════════════════════════════════════════════════════════
+//  INIT
+// ════════════════════════════════════════════════════════════════
+buildResponseTables();
+new ResizeObserver(resizeCv).observe(document.getElementById('cwrap'));
+resizeCv();
+requestAnimationFrame(loop);
+if (window.SLICE_PLAYER) bootPlayer();
+</script>
+</body>
+</html>

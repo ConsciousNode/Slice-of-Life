@@ -10,7 +10,7 @@ import { chromium } from 'playwright';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-const ENGINE = 'file://' + path.join(root, 'sliceworks-engine-v0.5.html');
+const ENGINE = 'file://' + path.join(root, 'sliceworks-engine-v0.6.html');
 const DICE = 'file://' + path.join(root, 'slice-and-dice-v0.4.html');
 let fails = 0; const check = (ok, msg) => { console.log((ok ? 'ok   ' : 'FAIL ') + msg); if (!ok) fails++; };
 

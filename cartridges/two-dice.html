@@ -56,7 +56,9 @@ header {
 }
 /* ── v0.5 player mode (cartridges) ── */
 #player-bar { display:none; }
+#roll-hud { display:none; position:absolute; left:50%; bottom:22px; transform:translateX(-50%); z-index:2; padding:8px 18px; border:1px solid var(--amber); background:rgba(11,10,15,.85); color:var(--amber); font-size:20px; font-weight:800; letter-spacing:1px; border-radius:4px; pointer-events:none; white-space:nowrap; }
 #player-insert { display:none; position:absolute; inset:0; flex-direction:column; align-items:center; justify-content:center; gap:12px; z-index:2; }
+.ctl { display:flex; align-items:center; gap:6px; font-size:10px; color:var(--muted); margin-bottom:6px; cursor:pointer; }
 .cart-in { width:100%; background:var(--bg2); border:1px solid var(--bdr); color:var(--text, #ddd); font:inherit; font-size:11px; padding:5px 7px; margin-bottom:6px; box-sizing:border-box; }
 body.player .side { display:none; }
 body.player header > *:not(.pkeep) { display:none; }
@@ -111,14 +113,14 @@ body.player #hint { display:none !important; }
 .si span { color:var(--amber); }
 </style>
 <script>window.SLICE_PLAYER=true;</script>
-<script type="application/json" id="cartridge">{"magic":"SOGA","version":"0.3","created":"2026-10-12T05:09:38.967Z","scene":{"gravity":[0,-100.8,0],"floor_y":0,"bounds":{"x":256,"y":256,"z":256}},"models":[{"id":"model_0","soli_name":"die_1","soli_data":"eyJtYWdpYyI6IlNPTEkiLCJ2ZXJzaW9uIjoiMC4xIiwicmVzb2x1dGlvbiI6eyJ4Ijo2LCJ5Ijo2LCJ6Ijo2fSwibWF0ZXJpYWxzIjpbeyJuYW1lIjoidm9pZCIsImRlbnNpdHkiOjAsImVsYXN0aWNpdHkiOjAsImNvbG9yIjpudWxsfSx7Im5hbWUiOiJnYXMiLCJkZW5zaXR5IjowLjAwMSwiZWxhc3RpY2l0eSI6MC45NSwiY29sb3IiOiIjODhjY2ZmIn0seyJuYW1lIjoibGlxdWlkIiwiZGVuc2l0eSI6MSwiZWxhc3RpY2l0eSI6MCwiY29sb3IiOiIjMzM3N2ZmIn0seyJuYW1lIjoic29mdCIsImRlbnNpdHkiOjAuNSwiZWxhc3RpY2l0eSI6MC43LCJjb2xvciI6IiM1NWRkODgifSx7Im5hbWUiOiJ0aXNzdWUiLCJkZW5zaXR5IjoxLjEsImVsYXN0aWNpdHkiOjAuNCwiY29sb3IiOiIjZmZhYTU1In0seyJuYW1lIjoiYm9uZSIsImRlbnNpdHkiOjEuOSwiY29sb3IiOiIjZWVlZWJiIn0seyJuYW1lIjoicG9seW1lciIsImRlbnNpdHkiOjEuNCwiY29sb3IiOiIjYmI4OGZmIn0seyJuYW1lIjoibWV0YWwiLCJkZW5zaXR5Ijo3LjgsImNvbG9yIjoiIzg4OTliYiJ9LHsibmFtZSI6ImRlbnNlIiwiZGVuc2l0eSI6MTEuMywiY29sb3IiOiIjZmY1NTMzIn0seyJuYW1lIjoid29vZCIsImRlbnNpdHkiOjAuNjUsImNvbG9yIjoiIzlhNmEzYyJ9LHsibmFtZSI6ImplbGx5IiwiZGVuc2l0eSI6MSwiY29sb3IiOiIjYzA0MDgwIn0seyJuYW1lIjoiZ2VsIiwiZGVuc2l0eSI6MS4xLCJjb2xvciI6IiM4MDQwYzAifSx7Im5hbWUiOiJydWJiZXIiLCJkZW5zaXR5IjowLjksImNvbG9yIjoiI2QwODA0MCJ9LHsibmFtZSI6ImZvYW0iLCJkZW5zaXR5IjowLjMsImNvbG9yIjoiI2MwYzA4MCJ9LHsibmFtZSI6InN0b25lIiwiZGVuc2l0eSI6Mi42LCJjb2xvciI6IiM1YTU4NzgifV0sInZveGVscyI6IkJnWUdCZ1lHQmdBR0JnQUdCZ1lHQmdZR0JnWUdCZ1lHQmdBR0JnQUdCZ1lHQmdZR0JnQUdCZ0FHQUFZR0JnWUFCZ1lHQmdZR0JnWUdCZ1lHQUFZR0JnWUdCZ1lHQmdZR0JnWUdCZ1lHQmdZR0JnWUdCZ1lHQmdZR0JnWUdCZ1lHQmdZR0JnWUdCZ1lBQUFZR0JnQUdCZ0FHQmdZR0JnWUdBQVlHQmdZR0JnWUdCZ1lHQmdZR0JnWUdCZ1lBQUFZR0JnQUdCZ0FHQUFZR0JnWUdCZ1lHQmdZR0JnWUdCZ1lHQUFZR0JnWUFCZ1lHQmdZR0JnWUdCZ1lHQmdBR0JnWUdCZ1lHQmdZR0JnWUdBQVlHQmdZR0JnQUdCZ1lHQmdZRyJ9"},{"id":"model_1","soli_name":"die_2","soli_data":"eyJtYWdpYyI6IlNPTEkiLCJ2ZXJzaW9uIjoiMC4xIiwicmVzb2x1dGlvbiI6eyJ4Ijo2LCJ5Ijo2LCJ6Ijo2fSwibWF0ZXJpYWxzIjpbeyJuYW1lIjoidm9pZCIsImRlbnNpdHkiOjAsImVsYXN0aWNpdHkiOjAsImNvbG9yIjpudWxsfSx7Im5hbWUiOiJnYXMiLCJkZW5zaXR5IjowLjAwMSwiZWxhc3RpY2l0eSI6MC45NSwiY29sb3IiOiIjODhjY2ZmIn0seyJuYW1lIjoibGlxdWlkIiwiZGVuc2l0eSI6MSwiZWxhc3RpY2l0eSI6MCwiY29sb3IiOiIjMzM3N2ZmIn0seyJuYW1lIjoic29mdCIsImRlbnNpdHkiOjAuNSwiZWxhc3RpY2l0eSI6MC43LCJjb2xvciI6IiM1NWRkODgifSx7Im5hbWUiOiJ0aXNzdWUiLCJkZW5zaXR5IjoxLjEsImVsYXN0aWNpdHkiOjAuNCwiY29sb3IiOiIjZmZhYTU1In0seyJuYW1lIjoiYm9uZSIsImRlbnNpdHkiOjEuOSwiY29sb3IiOiIjZWVlZWJiIn0seyJuYW1lIjoicG9seW1lciIsImRlbnNpdHkiOjEuNCwiY29sb3IiOiIjYmI4OGZmIn0seyJuYW1lIjoibWV0YWwiLCJkZW5zaXR5Ijo3LjgsImNvbG9yIjoiIzg4OTliYiJ9LHsibmFtZSI6ImRlbnNlIiwiZGVuc2l0eSI6MTEuMywiY29sb3IiOiIjZmY1NTMzIn0seyJuYW1lIjoid29vZCIsImRlbnNpdHkiOjAuNjUsImNvbG9yIjoiIzlhNmEzYyJ9LHsibmFtZSI6ImplbGx5IiwiZGVuc2l0eSI6MSwiY29sb3IiOiIjYzA0MDgwIn0seyJuYW1lIjoiZ2VsIiwiZGVuc2l0eSI6MS4xLCJjb2xvciI6IiM4MDQwYzAifSx7Im5hbWUiOiJydWJiZXIiLCJkZW5zaXR5IjowLjksImNvbG9yIjoiI2QwODA0MCJ9LHsibmFtZSI6ImZvYW0iLCJkZW5zaXR5IjowLjMsImNvbG9yIjoiI2MwYzA4MCJ9LHsibmFtZSI6InN0b25lIiwiZGVuc2l0eSI6Mi42LCJjb2xvciI6IiM1YTU4NzgifV0sInZveGVscyI6IkJnWUdCZ1lHQmdBR0JnQUdCZ1lHQmdZR0JnWUdCZ1lHQmdBR0JnQUdCZ1lHQmdZR0JnQUdCZ0FHQUFZR0JnWUFCZ1lHQmdZR0JnWUdCZ1lHQUFZR0JnWUdCZ1lHQmdZR0JnWUdCZ1lHQmdZR0JnWUdCZ1lHQmdZR0JnWUdCZ1lHQmdZR0JnWUdCZ1lBQUFZR0JnQUdCZ0FHQmdZR0JnWUdBQVlHQmdZR0JnWUdCZ1lHQmdZR0JnWUdCZ1lBQUFZR0JnQUdCZ0FHQUFZR0JnWUdCZ1lHQmdZR0JnWUdCZ1lHQUFZR0JnWUFCZ1lHQmdZR0JnWUdCZ1lHQmdBR0JnWUdCZ1lHQmdZR0JnWUdBQVlHQmdZR0JnQUdCZ1lHQmdZRyJ9"}],"instances":[{"modelIdx":0,"x":-9,"y":27,"z":-1,"rotX":0.3,"rotY":0.8,"rotZ":0.2,"static":false},{"modelIdx":1,"x":9,"y":30,"z":1,"rotX":0.7,"rotY":0.2,"rotZ":0.5,"static":false}],"environment":{"terrain":[]},"physics_state":{"bodies":[{"body_index":0,"model_name":"die_1","type":"rigid","dominant_material":"polymer","behavior":"elastic","mass":268.8000000000005,"elasticity":0,"position":[-9.547097050133958,29.845575240498693,-0.1272624256949667],"velocity":[0.16,0,0.02],"rotation":[0.3,0.8,0.2],"angular_velocity":[0.12,0.07,0.14],"orientation":[0.6407024091922485,-0.18979606097868743,0.7439609385527058,0.34618172558514115,0.9362933635841992,-0.0592701457656421,-0.6853164493328192,0.29552020666133955,0.665589341657975],"floor_ticks":0,"sleeping":false,"clusters":[]},{"body_index":1,"model_name":"die_2","type":"rigid","dominant_material":"polymer","behavior":"elastic","mass":268.8000000000005,"elasticity":0,"position":[7.922001243862204,32.04995178827778,2.9477938424562318],"velocity":[-0.16,0,-0.02],"rotation":[0.7,0.2,0.5],"angular_velocity":[-0.09,0.13,-0.11],"orientation":[0.7987294389230256,-0.3666848775860826,0.47704662659680186,0.5821874891907688,0.6712121661589577,-0.45883761335569295,-0.1519506855116402,0.644217687237691,0.7495962650805187],"floor_ticks":0,"sleeping":false,"clusters":[]}]},"triggers":[],"meta":{"tick":0,"sim_time":0,"tool":"SliceWorks Engine v0.5 — ConsciousNode SoftWorks","title":"Two Dice","start_from":"initial"}}</script>
+<script type="application/json" id="cartridge">{"magic":"SOGA","version":"0.3","created":"2026-10-12T05:49:12.366Z","scene":{"gravity":[0,-100.8,0],"floor_y":0,"bounds":{"x":256,"y":256,"z":256}},"models":[{"id":"model_0","soli_name":"die_1","soli_data":"eyJtYWdpYyI6IlNPTEkiLCJ2ZXJzaW9uIjoiMC4xIiwicmVzb2x1dGlvbiI6eyJ4Ijo3LCJ5Ijo3LCJ6Ijo3fSwibWF0ZXJpYWxzIjpbeyJuYW1lIjoidm9pZCIsImRlbnNpdHkiOjAsImVsYXN0aWNpdHkiOjAsImNvbG9yIjpudWxsfSx7Im5hbWUiOiJnYXMiLCJkZW5zaXR5IjowLjAwMSwiZWxhc3RpY2l0eSI6MC45NSwiY29sb3IiOiIjODhjY2ZmIn0seyJuYW1lIjoibGlxdWlkIiwiZGVuc2l0eSI6MSwiZWxhc3RpY2l0eSI6MCwiY29sb3IiOiIjMzM3N2ZmIn0seyJuYW1lIjoic29mdCIsImRlbnNpdHkiOjAuNSwiZWxhc3RpY2l0eSI6MC43LCJjb2xvciI6IiM1NWRkODgifSx7Im5hbWUiOiJ0aXNzdWUiLCJkZW5zaXR5IjoxLjEsImVsYXN0aWNpdHkiOjAuNCwiY29sb3IiOiIjZmZhYTU1In0seyJuYW1lIjoiYm9uZSIsImRlbnNpdHkiOjEuOSwiY29sb3IiOiIjZWVlZWJiIn0seyJuYW1lIjoicG9seW1lciIsImRlbnNpdHkiOjEuNCwiY29sb3IiOiIjYmI4OGZmIn0seyJuYW1lIjoibWV0YWwiLCJkZW5zaXR5Ijo3LjgsImNvbG9yIjoiIzg4OTliYiJ9LHsibmFtZSI6ImRlbnNlIiwiZGVuc2l0eSI6MTEuMywiY29sb3IiOiIjZmY1NTMzIn0seyJuYW1lIjoid29vZCIsImRlbnNpdHkiOjAuNjUsImNvbG9yIjoiIzlhNmEzYyJ9LHsibmFtZSI6ImplbGx5IiwiZGVuc2l0eSI6MSwiY29sb3IiOiIjYzA0MDgwIn0seyJuYW1lIjoiZ2VsIiwiZGVuc2l0eSI6MS4xLCJjb2xvciI6IiM4MDQwYzAifSx7Im5hbWUiOiJydWJiZXIiLCJkZW5zaXR5IjowLjksImNvbG9yIjoiI2QwODA0MCJ9LHsibmFtZSI6ImZvYW0iLCJkZW5zaXR5IjowLjMsImNvbG9yIjoiI2MwYzA4MCJ9LHsibmFtZSI6InN0b25lIiwiZGVuc2l0eSI6Mi42LCJjb2xvciI6IiM1YTU4NzgifV0sInZveGVscyI6IkJnWUdCZ1lHQmdZQUJnWUdBQVlHQmdZR0JnWUdCZ1lHQmdZR0JnWUdCZ1lHQmdZR0FBWUdCZ0FHQmdZR0JnWUdCZ1lBQmdZR0FBWUFCZ1lHQmdZQUJnWUdCZ1lHQmdZR0JnWUdCZ1lHQmdZR0JnWUdBQVlHQmdZR0JnWUdCZ1lHQmdZR0JnWUdCZ1lHQmdZR0JnWUdCZ1lHQmdZR0JnWUdCZ1lHQmdZR0JnWUdCZ1lHQmdZR0JnWUdCZ1lHQmdZR0JnWUdCZ0FHQmdZQUJnWUdCZ1lHQmdZR0JnWUdCZ1lHQUFZR0JnWUdCZ1lHQmdZR0JnWUdCZ1lHQmdZR0JnWUdBQVlHQmdZR0JnWUdCZ1lHQmdZR0JnWUdCZ1lHQmdZR0JnWUdCZ1lHQmdZR0JnWUdCZ1lHQmdZR0JnWUdCZ1lHQmdZR0JnWUdBQVlHQmdBR0FBWUdCZ1lHQmdZR0JnWUdCZ1lHQmdZR0JnWUdCZ1lHQmdZR0JnQUdCZ1lHQmdBR0JnWUdCZ1lHQmdZR0JnWUdCZ1lBQmdZR0JnWUdCZ1lHQmdZR0JnWUdBQVlHQmdZR0JnWUdCZ1lHQmdZR0JnQUdCZ1lHQmdZR0JnPT0ifQ=="},{"id":"model_1","soli_name":"die_2","soli_data":"eyJtYWdpYyI6IlNPTEkiLCJ2ZXJzaW9uIjoiMC4xIiwicmVzb2x1dGlvbiI6eyJ4Ijo3LCJ5Ijo3LCJ6Ijo3fSwibWF0ZXJpYWxzIjpbeyJuYW1lIjoidm9pZCIsImRlbnNpdHkiOjAsImVsYXN0aWNpdHkiOjAsImNvbG9yIjpudWxsfSx7Im5hbWUiOiJnYXMiLCJkZW5zaXR5IjowLjAwMSwiZWxhc3RpY2l0eSI6MC45NSwiY29sb3IiOiIjODhjY2ZmIn0seyJuYW1lIjoibGlxdWlkIiwiZGVuc2l0eSI6MSwiZWxhc3RpY2l0eSI6MCwiY29sb3IiOiIjMzM3N2ZmIn0seyJuYW1lIjoic29mdCIsImRlbnNpdHkiOjAuNSwiZWxhc3RpY2l0eSI6MC43LCJjb2xvciI6IiM1NWRkODgifSx7Im5hbWUiOiJ0aXNzdWUiLCJkZW5zaXR5IjoxLjEsImVsYXN0aWNpdHkiOjAuNCwiY29sb3IiOiIjZmZhYTU1In0seyJuYW1lIjoiYm9uZSIsImRlbnNpdHkiOjEuOSwiY29sb3IiOiIjZWVlZWJiIn0seyJuYW1lIjoicG9seW1lciIsImRlbnNpdHkiOjEuNCwiY29sb3IiOiIjYmI4OGZmIn0seyJuYW1lIjoibWV0YWwiLCJkZW5zaXR5Ijo3LjgsImNvbG9yIjoiIzg4OTliYiJ9LHsibmFtZSI6ImRlbnNlIiwiZGVuc2l0eSI6MTEuMywiY29sb3IiOiIjZmY1NTMzIn0seyJuYW1lIjoid29vZCIsImRlbnNpdHkiOjAuNjUsImNvbG9yIjoiIzlhNmEzYyJ9LHsibmFtZSI6ImplbGx5IiwiZGVuc2l0eSI6MSwiY29sb3IiOiIjYzA0MDgwIn0seyJuYW1lIjoiZ2VsIiwiZGVuc2l0eSI6MS4xLCJjb2xvciI6IiM4MDQwYzAifSx7Im5hbWUiOiJydWJiZXIiLCJkZW5zaXR5IjowLjksImNvbG9yIjoiI2QwODA0MCJ9LHsibmFtZSI6ImZvYW0iLCJkZW5zaXR5IjowLjMsImNvbG9yIjoiI2MwYzA4MCJ9LHsibmFtZSI6InN0b25lIiwiZGVuc2l0eSI6Mi42LCJjb2xvciI6IiM1YTU4NzgifV0sInZveGVscyI6IkJnWUdCZ1lHQmdZQUJnWUdBQVlHQmdZR0JnWUdCZ1lHQmdZR0JnWUdCZ1lHQmdZR0FBWUdCZ0FHQmdZR0JnWUdCZ1lBQmdZR0FBWUFCZ1lHQmdZQUJnWUdCZ1lHQmdZR0JnWUdCZ1lHQmdZR0JnWUdBQVlHQmdZR0JnWUdCZ1lHQmdZR0JnWUdCZ1lHQmdZR0JnWUdCZ1lHQmdZR0JnWUdCZ1lHQmdZR0JnWUdCZ1lHQmdZR0JnWUdCZ1lHQmdZR0JnWUdCZ0FHQmdZQUJnWUdCZ1lHQmdZR0JnWUdCZ1lHQUFZR0JnWUdCZ1lHQmdZR0JnWUdCZ1lHQmdZR0JnWUdBQVlHQmdZR0JnWUdCZ1lHQmdZR0JnWUdCZ1lHQmdZR0JnWUdCZ1lHQmdZR0JnWUdCZ1lHQmdZR0JnWUdCZ1lHQmdZR0JnWUdBQVlHQmdBR0FBWUdCZ1lHQmdZR0JnWUdCZ1lHQmdZR0JnWUdCZ1lHQmdZR0JnQUdCZ1lHQmdBR0JnWUdCZ1lHQmdZR0JnWUdCZ1lBQmdZR0JnWUdCZ1lHQmdZR0JnWUdBQVlHQmdZR0JnWUdCZ1lHQmdZR0JnQUdCZ1lHQmdZR0JnPT0ifQ=="}],"instances":[{"modelIdx":0,"x":-9,"y":27,"z":-1,"rotX":0.3,"rotY":0.8,"rotZ":0.2,"static":false},{"modelIdx":1,"x":9,"y":30,"z":1,"rotX":0.7,"rotY":0.2,"rotZ":0.5,"static":false}],"environment":{"terrain":[]},"controls":{"roll":true,"flick":true,"readout":true},"physics_state":{"bodies":[{"body_index":0,"model_name":"die_1","type":"rigid","dominant_material":"polymer","behavior":"elastic","mass":450.79999999999757,"elasticity":0,"position":[-9.648288500432496,30.32976660343519,0.03513352791376256],"velocity":[0.16,0,0.02],"rotation":[0.3,0.8,0.2],"angular_velocity":[0.12,0.07,0.14],"orientation":[0.6407024091922485,-0.18979606097868743,0.7439609385527058,0.34618172558514115,0.9362933635841992,-0.0592701457656421,-0.6853164493328192,0.29552020666133955,0.665589341657975],"floor_ticks":0,"sleeping":false,"clusters":[]},{"body_index":1,"model_name":"die_2","type":"rigid","dominant_material":"polymer","behavior":"elastic","mass":450.79999999999757,"elasticity":0,"position":[7.726290604431049,32.39250766557821,3.2875087933263623],"velocity":[-0.16,0,-0.02],"rotation":[0.7,0.2,0.5],"angular_velocity":[-0.09,0.13,-0.11],"orientation":[0.7987294389230256,-0.3666848775860826,0.47704662659680186,0.5821874891907688,0.6712121661589577,-0.45883761335569295,-0.1519506855116402,0.644217687237691,0.7495962650805187],"floor_ticks":0,"sleeping":false,"clusters":[]}]},"triggers":[],"meta":{"tick":0,"sim_time":0,"tool":"SliceWorks Engine v0.6 — ConsciousNode SoftWorks","title":"Two Dice","start_from":"initial"}}</script>
 </head>
 <body>
 <div id="app">
   <header>
     <div>
       <div class="logo">SliceWorks Engine</div>
-      <div class="logo-sub">ConsciousNode SoftWorks · v0.5</div>
+      <div class="logo-sub">ConsciousNode SoftWorks · v0.6</div>
     </div>
     <div class="hsep"></div>
     <button class="hbtn" onclick="document.getElementById('fi-soli').click()">LOAD .SOLI</button>
@@ -134,15 +136,16 @@ body.player #hint { display:none !important; }
     <button class="hbtn pkeep" onclick="resetSim()">↻ RESET</button>
     <button class="hbtn" id="btn-debug" onclick="toggleDebug()">DEBUG</button>
     <div class="hsep ml"></div>
-    <span style="font-size:9px;color:var(--muted)">Ed Interim · Kehai Interim · v0.5</span>
+    <span style="font-size:9px;color:var(--muted)">Ed Interim · Kehai Interim · v0.6</span>
   </header>
 
   <div id="player-bar">
     <div id="player-title">SliceWorks</div>
-    <span class="player-sub">a SliceWorks cartridge · drag to orbit · scroll to zoom</span>
+    <span class="player-sub" id="player-sub">a SliceWorks cartridge · drag to orbit · scroll to zoom</span>
   </div>
   <div class="main-row">
     <div id="cwrap">
+      <div id="roll-hud"></div>
       <div id="player-insert">
         <div style="font-size:15px;color:var(--amber);font-weight:700">Insert cartridge</div>
         <div style="font-size:10px;color:var(--muted);line-height:1.7;text-align:center">Load a .soga scene saved from SliceWorks Engine.<br>Nothing leaves your computer.</div>
@@ -190,6 +193,10 @@ body.player #hint { display:none !important; }
         <div class="pane" id="pane-export">
           <div class="sl">Export</div>
           <button class="eb" onclick="exportSoga()">EXPORT .SOGA</button>
+          <div class="sl" style="margin-top:14px">Controls</div>
+          <label class="ctl"><input type="checkbox" id="ctl-roll" checked="" onchange="S.controls.roll=this.checked"> Space / tap rolls everything</label>
+          <label class="ctl"><input type="checkbox" id="ctl-flick" checked="" onchange="S.controls.flick=this.checked"> Drag a body to flick it</label>
+          <label class="ctl"><input type="checkbox" id="ctl-readout" checked="" onchange="S.controls.readout=this.checked"> Read the dice when they stop</label>
           <div class="sl" style="margin-top:14px">Cartridge</div>
           <input id="cart-title" class="cart-in" type="text" placeholder="Title" value="Dice">
           <button class="eb" onclick="exportCartridge()">EXPORT CARTRIDGE (.HTML)</button>
@@ -1573,6 +1580,12 @@ function _render() {
       ctx.fillText(jl.name,(p1.sx+p2.sx)/2+5,(p1.sy+p2.sy)/2-6);
     }
   }
+  // v0.6: flick aim line
+  if (S.aim) {
+    ctx.strokeStyle='rgba(232,160,64,.85)'; ctx.lineWidth=2; ctx.setLineDash([6,5]);
+    ctx.beginPath(); ctx.moveTo(S.aim.x0,S.aim.y0); ctx.lineTo(S.aim.x1,S.aim.y1); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle='rgba(232,160,64,.9)'; ctx.beginPath(); ctx.arc(S.aim.x0,S.aim.y0,4,0,Math.PI*2); ctx.fill();
+  }
 }
 
 function drawFloor() {
@@ -1593,6 +1606,118 @@ function drawFloor() {
 // ════════════════════════════════════════════════════════════════
 //  MAIN LOOP
 // ════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════
+//  CONTROLS (v0.6) — what makes a cartridge playable
+//  roll    Space (and a tap on empty ground in the player): throw every
+//          loose rigid body up with a random spin
+//  flick   drag from a body and let go: it's thrown along the drag
+//  readout when everything that was moving comes to rest, count the pips
+//          on each body's upward face (holes in the top layer of voxels)
+//          and show the total. Any voxel die works, nothing is hard-coded.
+//  The settings travel with a .soga / cartridge.
+// ════════════════════════════════════════════════════════════════
+const CONTROL_DEFAULTS={ roll:true, flick:true, readout:true };
+S.controls={ ...CONTROL_DEFAULTS };
+function dynamicBodies(){ return S.bodies.filter(b=>b.type==='rigid'&&!b.static); }
+function wakeBody(b){ b.sleeping=false; b.floorTicks=0; }
+function startRunning(){ if (!S.running&&S.bodies.length) togglePlay(); }
+function gaussRand(){ let u=0; while(!u) u=Math.random(); return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*Math.random()); }
+function randomRotation(){ // uniform on SO(3): normalised 4-D Gaussian quaternion
+  let w=gaussRand(), x=gaussRand(), y=gaussRand(), z=gaussRand(); const n=Math.hypot(w,x,y,z); w/=n; x/=n; y/=n; z/=n;
+  return [1-2*(y*y+z*z),2*(x*y-w*z),2*(x*z+w*y), 2*(x*y+w*z),1-2*(x*x+z*z),2*(y*z-w*x), 2*(x*z-w*y),2*(y*z+w*x),1-2*(x*x+y*y)];
+}
+function bodyRadius(b){ let r=0; for (const k of b.corners) { const d=Math.hypot(k[0],k[1],k[2]); if (d>r) r=d; } return r; }
+function rollAll(){
+  const B=dynamicBodies(); if (!B.length) return;
+  const placed=[];
+  for (const b of B) {
+    wakeBody(b);
+    // Pick the die up and shake it: a fresh uniformly random orientation, lifted
+    // clear of the floor and of the dice already in the hand. Without this the
+    // result remembers the starting face — measured over 1000 dice from the demo
+    // start, chi² was 52-69 (the up face won ~22%); with it, see tests/controls.mjs.
+    b.R=randomRotation(); syncEuler(b);
+    const r=bodyRadius(b);
+    b.pos.y=Math.max(b.pos.y, r+0.05);
+    for (const o of placed) {
+      const dx=b.pos.x-o.b.pos.x, dz=b.pos.z-o.b.pos.z, need=r+o.r+0.05;
+      if (dx*dx+dz*dz<need*need && Math.abs(b.pos.y-o.b.pos.y)<need) b.pos.y=o.b.pos.y+need;
+    }
+    placed.push({b,r});
+    if (typeof updateAABB==='function') updateAABB(b);
+    b.vel={ x:(Math.random()-.5)*.16, y:.30+Math.random()*.16, z:(Math.random()-.5)*.16 };
+    b.angVel={ x:(Math.random()-.5)*1.2, y:(Math.random()-.5)*1.2, z:(Math.random()-.5)*1.2 };
+  }
+  S.result=null; S.resultShown=false; showResult(null);
+  startRunning();
+}
+function canvasPt(cx,cy){ const r=cv.getBoundingClientRect(); return { x:(cx-r.left)*cv.width/r.width, y:(cy-r.top)*cv.height/r.height }; }
+function pickBody(px,py){
+  let best=null, bd=Infinity;
+  for (const b of dynamicBodies()) {
+    const p=projectPt(b.pos.x,b.pos.y,b.pos.z);
+    let rmax=0; for (const k of b.corners) { const d=Math.hypot(k[0],k[1],k[2]); if (d>rmax) rmax=d; }
+    const d=Math.hypot(p.sx-px,p.sy-py);
+    if (d<rmax*CELL*0.8&&d<bd) { bd=d; best=b; }
+  }
+  return best;
+}
+// Screen drag (pixels) → a throw in world space, using the camera's own axes
+function flickBody(b,dx,dy){
+  const cY=Math.cos(S.cam.rotY), sY=Math.sin(S.cam.rotY), cX=Math.cos(S.cam.rotX), sX=Math.sin(S.cam.rotX);
+  const right=[cY,0,sY], up=[sY*sX,cX,-cY*sX];
+  const k=0.012/CELL;                          // 0.012 voxels/tick per voxel of drag
+  let v=[(right[0]*dx-up[0]*dy)*k, (right[1]*dx-up[1]*dy)*k, (right[2]*dx-up[2]*dy)*k];
+  const m=Math.hypot(...v), MAX=0.7; if (m>MAX) v=v.map(x=>x*MAX/m);
+  wakeBody(b);
+  b.vel={ x:b.vel.x+v[0], y:b.vel.y+v[1]+0.12, z:b.vel.z+v[2] };
+  // spin about the axis perpendicular to the throw, like a die leaving the hand
+  const ax=[v[2],0,-v[0]];
+  b.angVel={ x:b.angVel.x+ax[0]*1.4+(Math.random()-.5)*.1, y:b.angVel.y+(Math.random()-.5)*.2, z:b.angVel.z+ax[2]*1.4+(Math.random()-.5)*.1 };
+  S.result=null; S.resultShown=false; showResult(null);
+  startRunning();
+}
+// Pips: holes in the outer layer of whichever face points up
+function pipsUp(b){
+  const R=ensureR(b), up=[R[3],R[4],R[5]];          // world up, in the body's own axes
+  let ax=0; if (Math.abs(up[1])>Math.abs(up[ax])) ax=1; if (Math.abs(up[2])>Math.abs(up[ax])) ax=2;
+  if (Math.abs(up[ax])<0.9) return 0;               // not resting on a face
+  const lo=[Infinity,Infinity,Infinity], hi=[-Infinity,-Infinity,-Infinity];
+  for (const v of b.voxels) { const c=[v.lx,v.ly,v.lz]; for (let i=0;i<3;i++) { if (c[i]<lo[i]) lo[i]=c[i]; if (c[i]>hi[i]) hi[i]=c[i]; } }
+  const layer=up[ax]>0?hi[ax]:lo[ax], [u,w]=[0,1,2].filter(i=>i!==ax);
+  const W=hi[u]-lo[u]+1, H=hi[w]-lo[w]+1, seen=new Uint8Array(W*H);
+  const empty=(i,j)=>{ const c=[0,0,0]; c[ax]=layer; c[u]=lo[u]+i; c[w]=lo[w]+j; return !bodyOcc(b,c[0],c[1],c[2]); };
+  let pips=0;
+  for (let i=0;i<W;i++) for (let j=0;j<H;j++) {
+    if (seen[i*H+j]||!empty(i,j)) continue;
+    let edge=false; const st=[[i,j]]; seen[i*H+j]=1;
+    while (st.length) { const [a,c]=st.pop(); if (a===0||c===0||a===W-1||c===H-1) edge=true;
+      for (const [da,dc] of [[1,0],[-1,0],[0,1],[0,-1]]) { const na=a+da, nc=c+dc;
+        if (na<0||nc<0||na>=W||nc>=H||seen[na*H+nc]||!empty(na,nc)) continue; seen[na*H+nc]=1; st.push([na,nc]); } }
+    if (!edge) pips++;                              // an enclosed hole = one pip
+  }
+  return pips;
+}
+function showResult(text){
+  const el=document.getElementById('roll-hud'); if (!el) return;
+  el.textContent=text||''; el.style.display=text?'block':'none';
+}
+// Called every frame: when everything that was moving is at rest, read the dice
+function checkResult(){
+  if (!S.controls.readout||S.resultShown||!S.running) return;
+  const B=dynamicBodies(); if (!B.length||B.some(b=>!b.sleeping)) return;
+  const v=B.map(pipsUp).filter(n=>n>0);
+  S.resultShown=true;
+  if (!v.length) return;
+  S.result=v; const g=v.map(n=>'⚀⚁⚂⚃⚄⚅'[n-1]||'').join(' '); // each die's own face
+  showResult(v.length>1?`${g}   ${v.join(' + ')} = ${v.reduce((a,b)=>a+b,0)}`:`${g}  ${v[0]}`);
+}
+addEventListener('keydown',e=>{
+  if (e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA') return;
+  if (e.code==='Space'&&S.controls.roll) { e.preventDefault(); rollAll(); }
+  else if (e.key==='r'||e.key==='R') { resetSim(); S.resultShown=false; showResult(null); }
+});
+
 // v0.4: fixed 60 Hz physics regardless of display refresh rate
 let _lastT=null, _acc=0;
 function loop(now) {
@@ -1600,7 +1725,7 @@ function loop(now) {
     if (_lastT===null) _lastT=now;
     _acc+=Math.min(100,(now-_lastT)); _lastT=now;
     let n=0; while (_acc>=1000/60 && n<4) { physTick(); _acc-=1000/60; n++; }
-    if (n) { _render(); updateStats(); }
+    if (n) { _render(); updateStats(); checkResult(); }
   } else { _lastT=null; _acc=0; }
   requestAnimationFrame(loop);
 }
@@ -1626,7 +1751,7 @@ function toggleDebug() {
 }
 
 function resetSim() {
-  S.running=false; resetWarm();
+  S.running=false; resetWarm(); S.result=null; S.resultShown=false; showResult(null);
   if (S.playback) S.playback.frame=0;
   const btn=document.getElementById('btn-play');
   btn.textContent='▶ PLAY'; btn.classList.remove('on');
@@ -1719,7 +1844,7 @@ function buildTerrainBody() {
 // Scene loaded as authored (v0.5: no longer lifted 35 voxels into the air;
 // Studio places models on the ground, and its terrain is solid now).
 function loadScene(models, instances, terrain) {
-  S.models=models; S.instances=instances; S.terrain=terrain||[];
+  S.models=models; S.instances=instances; S.terrain=terrain||[]; S.result=null; S.resultShown=false; showResult(null);
   S.playback=null; G=0.028; FLOOR_Y=0;
   buildBodies(); saveOrig(); _render(); updateStats(); rebuildUI();
 }
@@ -1780,6 +1905,8 @@ function applySoga(d) {
   const models=d.models.map(m=>parseSoli(JSON.parse(decodeURIComponent(escape(atob(m.soli_data)))), m.soli_name));
   loadScene(models, d.instances.map(i=>({...i})), d.environment?.terrain||[]);
   if (d.scene?.gravity) G=-d.scene.gravity[1]/3600;
+  S.controls={ ...CONTROL_DEFAULTS, ...(d.controls||{}) }; syncControlsUI();
+  S.result=null; S.resultShown=false; showResult(null);
   if (isFinite(d.scene?.floor_y)) FLOOR_Y=d.scene.floor_y;
   const st=d.physics_state?.bodies||[];
   if (st.length===S.bodies.length) {
@@ -1824,15 +1951,19 @@ function onLoadSost(evt) {
 //  ⚄ DICE DEMO — v0.2 restored
 // ════════════════════════════════════════════════════════════════
 function makeDie(name) {
-  const R=6,POLY=6;
+  // v0.6: a 7×7×7 die, so every face's pips are separate holes the engine
+  // can count (the old 6×6×6 die had two touching pips on its 6 face).
+  // Opposite faces sum to 7: 1 top / 6 bottom, 2 / 5 on x, 3 / 4 on z.
+  const R=7,POLY=6;
   const vox=new Uint8Array(R*R*R).fill(POLY);
   const VI=(x,y,z)=>x+y*R+z*R*R;
-  [[2,5,2],[2,5,3],[3,5,2],[3,5,3]].forEach(([x,y,z])=>vox[VI(x,y,z)]=0);
-  [[1,0,1],[1,0,3],[1,0,4],[4,0,1],[4,0,3],[4,0,4]].forEach(([x,y,z])=>vox[VI(x,y,z)]=0);
-  [[5,1,1],[5,4,4]].forEach(([x,y,z])=>vox[VI(x,y,z)]=0);
-  [[0,1,1],[0,4,1],[0,2,3],[0,1,4],[0,4,4]].forEach(([x,y,z])=>vox[VI(x,y,z)]=0);
-  [[1,1,5],[3,3,5],[4,4,5]].forEach(([x,y,z])=>vox[VI(x,y,z)]=0);
-  [[1,1,0],[1,4,0],[4,1,0],[4,4,0]].forEach(([x,y,z])=>vox[VI(x,y,z)]=0);
+  const L=1,M=3,H=5;
+  [[M,6,M]].forEach(([x,y,z])=>vox[VI(x,y,z)]=0);                                         // 1
+  [[L,0,L],[L,0,M],[L,0,H],[H,0,L],[H,0,M],[H,0,H]].forEach(([x,y,z])=>vox[VI(x,y,z)]=0);  // 6
+  [[6,L,L],[6,H,H]].forEach(([x,y,z])=>vox[VI(x,y,z)]=0);                                  // 2
+  [[0,L,L],[0,L,H],[0,H,L],[0,H,H],[0,M,M]].forEach(([x,y,z])=>vox[VI(x,y,z)]=0);          // 5
+  [[L,L,6],[M,M,6],[H,H,6]].forEach(([x,y,z])=>vox[VI(x,y,z)]=0);                          // 3
+  [[L,L,0],[L,H,0],[H,L,0],[H,H,0]].forEach(([x,y,z])=>vox[VI(x,y,z)]=0);                  // 4
   let bin='';
   for (let i=0;i<vox.length;i+=4096) bin+=String.fromCharCode(...vox.subarray(i,i+4096));
   const mats=MAT.map(m=>({...m}));
@@ -1843,7 +1974,7 @@ function makeDie(name) {
 }
 
 function diceDemo() {
-  S.terrain=[]; S.playback=null; G=0.028; FLOOR_Y=0;
+  S.terrain=[]; S.playback=null; G=0.028; FLOOR_Y=0; S.result=null; S.resultShown=false; showResult(null);
   S.running=false;
   document.getElementById('btn-play').textContent='▶ PLAY';
   document.getElementById('btn-play').classList.remove('on');
@@ -1885,7 +2016,7 @@ function makeGasBlob(name) {
 }
 
 function gasDemo() {
-  S.terrain=[]; S.playback=null; G=0.028; FLOOR_Y=0;
+  S.terrain=[]; S.playback=null; G=0.028; FLOOR_Y=0; S.result=null; S.resultShown=false; showResult(null);
   S.running=false;
   document.getElementById('btn-play').textContent='▶ PLAY';
   document.getElementById('btn-play').classList.remove('on');
@@ -1920,7 +2051,7 @@ function makeJellyBlob(name) {
 }
 
 function jellyDemo() {
-  S.terrain=[]; S.playback=null; G=0.028; FLOOR_Y=0;
+  S.terrain=[]; S.playback=null; G=0.028; FLOOR_Y=0; S.result=null; S.resultShown=false; showResult(null);
   S.running=false;
   document.getElementById('btn-play').textContent='▶ PLAY';
   document.getElementById('btn-play').classList.remove('on');
@@ -1959,6 +2090,7 @@ function buildSoga() {
     // v0.3: placement, so the file can be loaded back (and played as a cartridge)
     instances:S.instances.map(i=>({ id:i.id, modelIdx:i.modelIdx, x:i.x, y:i.y, z:i.z, rotX:i.rotX||0, rotY:i.rotY||0, rotZ:i.rotZ||0, static:!!i.static })),
     environment:{ terrain:S.terrain||[] },
+    controls:{ ...S.controls },                    // v0.6
     physics_state:{ bodies:S.bodies.map((b,i)=>({
       body_index:i, model_name:b.name, type:b.type,
       dominant_material:MAT[b.dominantMat]?.name||'?',
@@ -1976,7 +2108,7 @@ function buildSoga() {
       })):[],
     })) },
     triggers:[],
-    meta:{ tick:S.tick, sim_time:S.simTime, tool:'SliceWorks Engine v0.5 — ConsciousNode SoftWorks' },
+    meta:{ tick:S.tick, sim_time:S.simTime, tool:'SliceWorks Engine v0.6 — ConsciousNode SoftWorks' },
   };
   return soga;
 }
@@ -2011,6 +2143,17 @@ function exportCartridge() {
   a.download=(title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'cartridge')+'.html';
   a.click(); URL.revokeObjectURL(a.href);
 }
+function controlsHint(){
+  const c=S.controls, parts=[];
+  if (c.roll) parts.push('space or tap: roll');
+  if (c.flick) parts.push('drag a die: flick it');
+  parts.push('drag elsewhere: orbit','scroll: zoom','R: reset');
+  return parts.join(' · ');
+}
+function syncControlsUI(){
+  for (const k of ['roll','flick','readout']) { const el=document.getElementById('ctl-'+k); if (el) el.checked=!!S.controls[k]; }
+  const sub=document.getElementById('player-sub'); if (sub&&document.body.classList.contains('player')) sub.textContent=controlsHint();
+}
 function bootPlayer() {
   document.body.classList.add('player');
   const cart=document.getElementById('cartridge');
@@ -2021,6 +2164,7 @@ function bootPlayer() {
       applySoga(d);
       titleEl.textContent=d.meta?.title||'SliceWorks';
       document.getElementById('player-insert').style.display='none';
+      syncControlsUI();
       setTimeout(()=>{ if (!S.running) togglePlay(); }, 400);
     } catch(err) { titleEl.textContent='Cartridge error: '+err.message; }
   } else {
@@ -2033,6 +2177,7 @@ function onInsertCartridge(evt) {
     applySoga(d);
     document.getElementById('player-title').textContent=d.meta?.title||'SliceWorks';
     document.getElementById('player-insert').style.display='none';
+    syncControlsUI();
     if (!S.running) togglePlay();
   }, '.soga');
 }
@@ -2117,20 +2262,32 @@ const clamp=(v,lo,hi)=>v<lo?lo:v>hi?hi:v;
 
 cv.addEventListener('mousedown',e=>{
   e.preventDefault();
-  S.drag={type:e.button===2?'pan':'orbit',x:e.clientX,y:e.clientY,cam:{...S.cam}};
+  if (e.button===0&&S.controls.flick) {
+    const p=canvasPt(e.clientX,e.clientY), b=pickBody(p.x,p.y);
+    if (b) { S.drag={type:'flick',body:b,x:e.clientX,y:e.clientY,p0:p}; S.aim={x0:p.x,y0:p.y,x1:p.x,y1:p.y}; return; }
+  }
+  S.drag={type:e.button===2?'pan':'orbit',x:e.clientX,y:e.clientY,cam:{...S.cam},moved:false};
   cv.classList.add('g');
 });
 cv.addEventListener('mousemove',e=>{
   if (!S.drag) return;
   const dx=e.clientX-S.drag.x,dy=e.clientY-S.drag.y;
+  if (Math.abs(dx)+Math.abs(dy)>4) S.drag.moved=true;
+  if (S.drag.type==='flick') { const p=canvasPt(e.clientX,e.clientY); S.aim.x1=p.x; S.aim.y1=p.y; if (!S.running) render(); return; }
   if (S.drag.type==='orbit') {
     S.cam.rotY=S.drag.cam.rotY-dx*0.005;
     S.cam.rotX=clamp(S.drag.cam.rotX+dy*0.005,-Math.PI/2+0.1,Math.PI/6);
   } else { S.cam.panX=S.drag.cam.panX+dx; S.cam.panY=S.drag.cam.panY+dy; }
   if (!S.running) render();
 });
-cv.addEventListener('mouseup',()=>{ S.drag=null; cv.classList.remove('g'); });
-cv.addEventListener('mouseleave',()=>{ S.drag=null; cv.classList.remove('g'); });
+function endDrag(cx,cy){
+  const d=S.drag; S.drag=null; cv.classList.remove('g');
+  if (!d) return;
+  if (d.type==='flick') { const p=canvasPt(cx,cy); S.aim=null; flickBody(d.body,p.x-d.p0.x,p.y-d.p0.y); return; }
+  if (d.type==='orbit'&&!d.moved&&document.body.classList.contains('player')&&S.controls.roll) rollAll();   // tap on empty ground
+}
+cv.addEventListener('mouseup',e=>endDrag(e.clientX,e.clientY));
+cv.addEventListener('mouseleave',()=>{ if (S.drag?.type==='flick') { S.aim=null; render(); } S.drag=null; cv.classList.remove('g'); });
 cv.addEventListener('wheel',e=>{
   e.preventDefault();
   S.cam.zoom=clamp(S.cam.zoom*(e.deltaY>0?0.90:1.11),0.1,8);
@@ -2143,12 +2300,20 @@ cv.addEventListener('contextmenu',e=>e.preventDefault());
 cv.addEventListener('touchstart',e=>{
   e.preventDefault();
   S.touches=[...e.touches];
-  if (e.touches.length===1) S.drag={type:'orbit',x:e.touches[0].clientX,y:e.touches[0].clientY,cam:{...S.cam}};
+  if (e.touches.length===1) {
+    const t=e.touches[0], p=canvasPt(t.clientX,t.clientY), b=S.controls.flick?pickBody(p.x,p.y):null;
+    S.drag=b?{type:'flick',body:b,x:t.clientX,y:t.clientY,p0:p,lx:t.clientX,ly:t.clientY}
+            :{type:'orbit',x:t.clientX,y:t.clientY,cam:{...S.cam},moved:false,lx:t.clientX,ly:t.clientY};
+    if (b) S.aim={x0:p.x,y0:p.y,x1:p.x,y1:p.y};
+  } else if (S.drag?.type==='flick') { S.aim=null; S.drag=null; }
 },{passive:false});
 cv.addEventListener('touchmove',e=>{
   e.preventDefault();
   if (e.touches.length===1&&S.drag) {
     const dx=e.touches[0].clientX-S.drag.x,dy=e.touches[0].clientY-S.drag.y;
+    S.drag.lx=e.touches[0].clientX; S.drag.ly=e.touches[0].clientY;
+    if (Math.abs(dx)+Math.abs(dy)>6) S.drag.moved=true;
+    if (S.drag.type==='flick') { const p=canvasPt(S.drag.lx,S.drag.ly); S.aim.x1=p.x; S.aim.y1=p.y; if (!S.running) render(); return; }
     S.cam.rotY=S.drag.cam.rotY-dx*0.005;
     S.cam.rotX=clamp(S.drag.cam.rotX+dy*0.005,-Math.PI/2+0.1,Math.PI/6);
     if (!S.running) render();
@@ -2160,7 +2325,7 @@ cv.addEventListener('touchmove',e=>{
     if (!S.running) render();
   }
 },{passive:false});
-cv.addEventListener('touchend',()=>{ S.drag=null; S.touches=[]; });
+cv.addEventListener('touchend',()=>{ const d=S.drag; S.touches=[]; if (d) endDrag(d.lx??d.x, d.ly??d.y); else S.drag=null; });
 
 // ════════════════════════════════════════════════════════════════
 //  INIT

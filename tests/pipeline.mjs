@@ -11,7 +11,7 @@ import { chromium } from 'playwright';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-const ENGINE = 'file://' + path.join(root, 'sliceworks-engine-v0.5.html');
+const ENGINE = 'file://' + path.join(root, 'sliceworks-engine-v0.6.html');
 const DICE = 'file://' + path.join(root, 'slice-and-dice-v0.4.html');
 let fails = 0; const check = (ok, msg) => { console.log((ok ? 'ok   ' : 'FAIL ') + msg); if (!ok) fails++; };
 const br = await chromium.launch(); const errs = [];
@@ -85,7 +85,7 @@ const cart = await pc.evaluate(() => ({ player: document.body.classList.contains
 check(cart.player && cart.title === 'Two Dice' && cart.bodies === 2 && cart.running && cart.tick > 60 && cart.play,
   `cartridge boots as a player and runs (${(cartHtml.length/1024).toFixed(0)} KB, "${cart.title}", tick ${cart.tick})`);
 const pp = await br.newPage(); pp.on('pageerror', e => errs.push('player: ' + e.message));
-await pp.goto('file://' + path.join(root, 'sliceworks-player-v0.1.html')); await pp.waitForTimeout(400);
+await pp.goto('file://' + path.join(root, 'sliceworks-player-v0.2.html')); await pp.waitForTimeout(400);
 const blank = await pp.evaluate(() => getComputedStyle(document.getElementById('player-insert')).display);
 check(blank === 'flex', 'blank player shows "Insert cartridge"');
 check(errs.length === 0, 'no page errors' + (errs.length ? ': ' + errs.join('; ') : ''));
