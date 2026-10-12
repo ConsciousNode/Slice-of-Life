@@ -1,6 +1,33 @@
 # Changelog
 
-All notable changes to Slice of Life are documented here.
+All notable changes to the Slice Suite. Before 2026-10-12 this repo held Slice of Life only; its history is below.
+
+---
+
+## 2026-10-12 · Suite home · Kehai Interim
+
+This repo is now the home of the whole Slice Suite: Slice of Life v0.3, Slice Studio v0.3, Slice and Dice v0.2 → v0.3 and SliceWorks Engine v0.3.2 → v0.4, plus the specs and handoff notes in `docs/`. `index.html` is a launcher for all four.
+
+### SliceWorks Engine v0.4: contact physics
+Measured on v0.3.2: of 16 dice dropped in the dice demo, **0** came to rest flat (they froze 6–43° tilted, balanced on edges and corners). Nothing turned a collision into torque; spin was free rotation that decayed 8% per tick, so the landing face came from the starting spin. The moment of inertia was computed and never used.
+- Orientation is a rotation matrix integrated with world angular velocity. Euler angles in `b.rot` are derived from it every tick in `rotVec`'s convention (round trip exact to 7·10⁻¹⁶), so the renderer, joints and `.soga` export are unchanged. Writes to `b.rot` (the fixed joint) are picked up automatically.
+- Full inertia tensor per body about the true centre of mass (voxel centres).
+- Floor contact at the outer voxel corners: sequential impulses with material restitution and Coulomb friction. Contacts are solved in a fixed order so results are reproducible across tools.
+- Floor plane at y = 0, where the grid is drawn (rigid bodies used to rest 0.5 above it).
+- Bodies sleep only on a stable support (3+ contacts not in a line).
+- Angular damping 0.92 → 0.995 per tick (0.92 stopped any tumble within a few frames).
+- Fixed 60 Hz physics step: no more double speed on 120 Hz displays.
+- AABBs are built from the rotated corners.
+- Result: 16/16 dice land flat (max tilt 0.3°); a die placed just past balance on an edge tips onto a face; 60 random throws turned up all six faces; gas and jelly demos unchanged.
+
+### Slice and Dice v0.3: the Engine's physics
+v0.2 previewed with its own physics: bodies were spheres, gravity was −9.8/s² against the Engine's ≈100.8, and the response curves were in other units, so a throw authored in Dice played out differently in the Engine.
+- The preview now runs the Engine v0.4 rigid-body core, copied verbatim (materials, curves, lookup tables, rotation, inertia, contact solver). Same throw, same result: identical to 4·10⁻¹³ voxels after 300 frames.
+- UI units are per second (vox/s, rad/s, vox/s²); gravity defaults to the Engine's −100.8. `.soan` v0.3 records the units and the core.
+- Static tracks are immovable in collisions.
+
+### Tests
+`tests/physics.mjs` (Playwright): dice land flat, edge tipping, Dice/Engine agreement.
 
 ---
 

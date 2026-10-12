@@ -1,6 +1,6 @@
 # Goals
 
-Development roadmap for Slice of Life.  
+Development roadmap for the Slice Suite (the sections up to Physics are Slice of Life's).  
 These are intentions, not promises. The constraint is the source of the invention.
 
 ---
@@ -42,10 +42,11 @@ Physics preview was considered for v0.3 but removed from scope. It belongs in Sl
 Slice of Life is the authoring tool in a growing pipeline:
 
 ```
-Slice of Life    → .soli  →  voxel modeler          Kehai Interim   ✓ v0.2
-Slice Studio     → .sost  →  scene composer          Komo Interim    ✓ v0.2
-Slice and Dice   → .soan  →  animation studio        Vael Interim    ⚡ speccing
-SliceWorks       → .soga  →  game engine / runtime   Ed Interim      ⚡ specced
+Slice of Life    → .soli  →  voxel modeler          Kehai Interim   ✓ v0.3
+Slice Studio     → .sost  →  scene composer          Komo Interim    ✓ v0.3
+Slice and Dice   → .soan  →  animation studio        Vael Interim    ✓ v0.3
+SliceWorks       → .soga  →  game engine / runtime   Ed Interim      ✓ v0.4
+(future)         → .soga  →  standalone player: the console
 ```
 
 The format family: `.soli` `.sost` `.soan` `.soga`
@@ -53,6 +54,14 @@ The format family: `.soli` `.sost` `.soan` `.soga`
 Models flow: authored in Slice of Life → composed in Slice Studio → animated in Slice and Dice → run in SliceWorks. Each format carries everything the next tool needs. No additional authoring required at handoff.
 
 The `.soli` format already carries material densities and elasticities. When SliceWorks reads a model, it knows how it behaves physically because you built it with interior geometry and real material properties. The physics is in the model, not in a separate rig.
+
+---
+
+## Next for the physics (from the 2026-10-12 review)
+
+- **Body–body contact physics.** Bodies still collide as axis-aligned boxes; the floor solver's corner impulses should be extended to body pairs, so dice clatter off each other with spin.
+- **Hinge limits** (`limit_deg`): orientation is now a matrix, so tracking each body relative to the joint's bind pose is possible.
+- **Engine `.soan` import**, so parametric animations from Dice replay in the Engine (they will match: same core).
 
 ---
 

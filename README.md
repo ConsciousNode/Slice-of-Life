@@ -1,163 +1,65 @@
-# Slice of Life
-**ConsciousNode SoftWorks · v0.2**
+# Slice Suite
 
-Volumetric voxel modeler. No wireframes. No polygons. Build 3D models slice by slice, the way a 3D printer builds.
+**ConsciousNode SoftWorks** · voxel modeling, scenes, animation and physics in a browser tab.
 
----
+**[→ Open the suite](https://consciousnode.github.io/Slice-of-Life/)**
 
-## What it is
+> *You don't animate dice. You build dice, then you let go.*
 
-Traditional 3D modeling works with surfaces — meshes, polygons, wireframes. The geometry you see is a shell. Physics engines run on invisible proxy objects that approximate the visual shape. The gap between shell and proxy is where clipping happens, where Bethesda mammoths launch into orbit, where bad triggers make physics weird.
+Most 3D tools model a hollow shell and then bolt an invisible physics proxy onto it. The Slice Suite builds the other way round. A model is a solid block of voxels, and every voxel is a real material with a density and a bounciness. So a model is already a physics object: the engine reads what it's made of and simulates that. Bodies aren't declared, they're *found* (connected voxels of rigid material). Where structure can't be inferred from material alone, like whether two bones meet at a hinge or a ball joint, you author it.
 
-Slice of Life builds differently. Models are volumetric: a three-dimensional array of material voxels, each carrying a density and elasticity. There is no shell. There is no proxy. The model *is* its own physics object, because it has actual interior geometry. A pipe with liquid inside has liquid voxels inside. A bone surrounded by tissue has tissue voxels surrounding it. No clipping because two voxels cannot share a cell.
+Every tool is a single HTML file. No install, no server, no dependencies, works offline. The Xinu philosophy: the constraint is the source of the invention.
 
-You build models one XY cross-section at a time, stepping through the Z axis — the same way a 3D printer deposits material. Each slice shows a ghost of the slice below it so you can maintain consistent shape across depth.
+## The pipeline
 
-The 3D preview uses a WebGL2 DDA (Amanatides & Woo) ray caster — actual volumetric rendering with correct face normals and Lambertian lighting. No polygons at render time either.
-
----
-
-## Quick start
-
-Download `slice-of-life-v0.2.html`. Open it in a browser. That's it.
-
-No server. No install. No dependencies. Single file, works offline. This is the Xinu philosophy: the constraint is the source of the invention.
-
----
-
-## Controls
-
-### Drawing tools
-| Key | Tool |
-|-----|------|
-| `d` | Draw (freehand) |
-| `e` | Erase |
-| `r` | Rectangle |
-| `c` | Circle |
-| `l` | Line |
-| `f` | Flood fill |
-| `[` `]` | Brush size −/+ |
-
-Shape tools (rect, circle, ellipse, line) preview as you drag and commit on release.
-
-### Navigation
-| Key | Action |
-|-----|--------|
-| `↑` or `.` | Next Z slice |
-| `↓` or `,` | Previous Z slice |
-| `Ctrl+Z` | Undo |
-| `Ctrl+Shift+Z` | Redo |
-
-### 3D preview
-- **Drag** to rotate (Y axis)
-- **Scroll** to zoom
-
-### Resolution
-Set X, Y, Z dimensions in the header (4–128 per axis) and click **NEW** to resize. Existing data is cleared on resize.
-
----
-
-## Materials
-
-Nine built-in materials, density-coded from cool (light) to warm (dense):
-
-| Material | Density | Color |
-|----------|---------|-------|
-| gas | 0.001 g/cm³ | light blue |
-| liquid | 1.0 g/cm³ | blue |
-| soft | 0.5 g/cm³ | green |
-| tissue | 1.1 g/cm³ | orange |
-| bone | 1.9 g/cm³ | pale yellow |
-| polymer | 1.4 g/cm³ | purple |
-| metal | 7.8 g/cm³ | steel blue |
-| dense | 11.3 g/cm³ | red |
-
-**Recolor:** click a material's color swatch to open a color picker.  
-**Rename:** click a material's name field and type.  
-Changes are saved to the exported `.soli`.
-
----
-
-## The Z-map
-
-The thin strip below the Z slider shows the content of every slice at a glance:
-
-- **Teal** — current slice
-- **Amber** — slice has voxels
-- **Dark** — slice is empty
-
----
-
-## The ghost slice
-
-When editing any slice above Z=0, the slice immediately below is rendered at ~22% opacity as an onion-skin guide. This makes it significantly easier to maintain consistent shape across depth — you can see where you came from without being distracted by where you're going.
-
----
-
-## Exporting and importing
-
-Type a model name in the header field (between undo/redo and the export button). Click **EXPORT .SOLI**. The file is saved as `your-name.soli`.
-
-Click **OPEN .SOLI** to load a previously saved model.
-
----
-
-## The `.soli` format
-
-`.soli` is a JSON file. It is human-readable, version-tagged, and self-contained.
-
-```json
-{
-  "magic": "SOLI",
-  "version": "0.1",
-  "name": "metal pipe with water",
-  "resolution": { "x": 32, "y": 32, "z": 32 },
-  "materials": [
-    { "name": "void",  "density": 0,   "elasticity": 0,   "color": null },
-    { "name": "metal", "density": 7.8, "elasticity": 0.05, "color": "#8899bb" },
-    ...
-  ],
-  "voxels": "<base64-encoded Uint8Array>"
-}
+```
+Slice of Life  →  Slice Studio  →  Slice and Dice  →  SliceWorks Engine  →  (future) the console
+    .soli            .sost             .soan               .soga
+    model            scene             animation           game / runtime
 ```
 
-The `voxels` field is a base64-encoded flat `Uint8Array` of length `x × y × z`. Each byte is a material index (0 = void, 1–8 = material). Index order: `z * RX * RY + y * RX + x`.
+| Tool | File | What it does | Lead |
+|---|---|---|---|
+| **Slice of Life** | `slice-of-life-v0.3.html` | Volumetric modeler. Build slice by slice like a 3D printer, with real materials and authored joints (fixed, hinge, ball). WebGL2 ray-cast preview. | Kehai Interim |
+| **Slice Studio** | `slice-studio-v0.3.html` | Scene composer. Place models, draw terrain, room presets, free-fly camera. | Komorebi |
+| **Slice and Dice** | `slice-and-dice-v0.3.html` | Animation studio. Set a throw (position, spin, velocity), preview it with the Engine's own physics, export `.soan` (parametric or baked). | Vael Interim |
+| **SliceWorks Engine** | `sliceworks-engine-v0.4.html` | Physics and runtime. Rigid bodies with contact physics, soft bodies, gas, fracture, joints. Exports `.soga`. | Ed Interim |
 
-The format is intentionally simple. A future physics engine reads density and elasticity directly. No additional authoring required.
+Older versions stay in the repo next to the current ones.
 
----
+## The goal
 
-## Ecosystem
+A fifth platform: a standalone player that loads a `.soga` file the way a console loads a cartridge. The whole engine in one HTML file, the scene pre-baked. The `.soga` is the ROM, the HTML is the console. Model it, stage it, throw it, ship it, all in a browser.
 
-Slice of Life is part of the ConsciousNode SoftWorks toolchain:
+## What's new (2026-10-12)
 
-- **Slice of Life** ← you are here · voxel modeler
-- **[Slice Studio](https://github.com/ConsciousNode/Slice-Studio)** · scene composition tool by Komorebi Interim
-- **SliceWorks Engine** · game engine consuming `.sost` scene files (in development, spec by Ed Interim)
+**The dice land on a face now.** In Engine v0.3.2, 0 of 16 dropped dice came to rest flat; they froze tilted on edges and corners, because nothing turned a collision into torque. Engine v0.4 adds real contact physics: rotation matrices, a full inertia tensor per body, and impulses at the touching voxel corners with restitution and friction from the material tables. A die on its edge now tips onto a face by itself, and which face comes up is decided by the physics. In a 60-die test all six faces turned up.
 
-Models flow: `.soli` → placed in Slice Studio → exported as `.sost` → loaded by SliceWorks Engine.
+**One physics core.** Slice and Dice used to run its own physics (spheres, gravity about 10× weaker, different units), so a throw authored there played out differently in the Engine. Dice v0.3 runs the Engine's core, and the same throw ends in the same place to within 10⁻¹² voxels.
 
----
+Details in [CHANGELOG.md](CHANGELOG.md).
 
-## Technical notes
+## Tests
 
-The 3D preview uses WebGL2 with a DDA ray caster (Amanatides & Woo algorithm). Voxel data is uploaded as a `TEXTURE_3D` (R8 format) and sampled with `texelFetch` in the fragment shader. No polygons are generated at any stage. The orthographic camera supports Y-axis rotation with a scale formula that correctly fits the grid regardless of canvas aspect ratio.
+```bash
+npm i playwright        # once
+node tests/physics.mjs  # dice land flat · edge tipping · Dice and Engine agree
+```
 
-If WebGL2 is unavailable, the preview falls back to a canvas 2D isometric renderer with painter's algorithm sorting.
+## Docs
 
----
+- [Slice of Life user guide and `.soli` format](docs/slice-of-life.md)
+- [SliceWorks Engine spec v0.1](docs/sliceworks-engine-spec-v0.1.md)
+- [Slice and Dice spec v0.1](docs/slice-and-dice-spec-v0.1.md)
+- [Slice Studio v0.3 → Dice handoff (`.sost` v0.3)](docs/slice-studio-v0.3-handoff.md)
+- [Goals and roadmap](GOALS.md)
 
 ## Credits
 
-**Concept and design:** Kham Kizer (ConsciousNode SoftWorks)  
-**Implementation:** Kehai Interim (ConsciousNode SoftWorks)  
-**Drawing engine architecture:** adapted from Jiden Furui v3.1  
-**Export pattern:** adapted from FPSS v1.0  
-**Typed array patterns:** informed by Autoencofabulator v0.2
+**Kham** (Khamerron Ramsey Kizer): concept, vision, direction
+**Kehai Interim**: Slice of Life, voxel format and renderer; Engine v0.4 contact physics; Dice v0.3 core
+**Komorebi**: Slice Studio, `.sost` format; Engine bug-fix pass
+**Vael Interim**: Slice and Dice
+**Ed Interim**: SliceWorks Engine
 
----
-
-## License
-
-MIT. Single file. Zero dependencies. Offline-first.  
-ConsciousNode SoftWorks · 2026
+MIT License · ConsciousNode SoftWorks · 2026

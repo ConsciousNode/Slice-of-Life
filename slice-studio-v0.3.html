@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<!--
+  Slice Studio v0.3
+  ConsciousNode SoftWorks · 2026-06-20
+  Kham Kizer · Komorebi
+
+  v0.3 — Free-fly camera (WASD + mode toggle) · Focus Selected
+          Environment presets (floor / room_small / room_large)
+          Terrain draw mode · Expanded scene grid (256 units)
+          .sost v0.3 format (env block · cam world pos · joint_states)
+
+  Imports: .soli (Slice of Life v0.1+)  ·  .sost (Slice Studio scenes v0.2+)
+  Exports: .sost v0.3 (ConsciousNode Scene Format)
+
+  Controls — SCENE mode / ORBIT:
+    Left-drag         — orbit camera
+    Right-drag        — pan camera
+    Scroll            — zoom
+    Click instance    — select
+    Arrows            — move selected X/Z  ·  PgUp/PgDn — move Y
+    Shift+*           — ×8 speed
+    Q / E             — yaw 45°
+    R / F             — pitch 45°
+    T / G             — roll 45°
+    Delete            — remove selected
+
+  Controls — SCENE mode / FREE:
+    W/A/S/D           — translate camera XZ
+    PgUp/PgDn         — translate camera Y (no selection only)
+    Left-drag         — orbit (look)
+    Right-drag        — pan offset
+    Scroll            — zoom
+    Arrows / Q-G      — move/rotate selected instance (same as orbit)
+
+  Controls — DRAW mode:
+    Left click/drag   — place terrain voxel
+    Right click       — erase terrain voxel
+    Right-drag        — pan camera
+    Scroll            — zoom
+
+  Renderer credit:   isometric engine adapted from Slice of Life v0.1 (Kehai Interim)
+  Export credit:     blob/download pattern from FPSS v1.0
+
+  Xinu-compliant. Zero dependencies. Single file. MIT License.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Slice Studio — ConsciousNode SoftWorks</title>
+<style>
+:root {
+  --bg:    #0b0a0f;
+  --bg2:   #131120;
+  --bg3:   #1a1828;
+  --border:#2a2640;
+  --amber: #c89b4a;
+  --adim:  #6a5220;
+  --aglow: rgba(200,155,74,.10);
+  --teal:  #4ab8c8;
+  --tdim:  #1e5060;
+  --tglow: rgba(74,184,200,.10);
+  --text:  #e4dff0;
+  --muted: #7a7498;
+  --ok:    #86efac;
+  --err:   #f87171;
+  --stone: #5a5878;
+  --mono:  ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
+  --t:     .14s ease;
+}
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+html,body {
+  height:100%; background:var(--bg); color:var(--text);
+  font-family:var(--mono); font-size:12px; overflow:hidden;
+}
+::-webkit-scrollbar { width:4px; }
+::-webkit-scrollbar-thumb { background:var(--border); border-radius:4px; }
+#app { display:flex; flex-direction:column; height:100dvh; }
+
+/* ── HEADER ──────────────────────────────────────────────── */
+header {
+  display:flex; align-items:center; gap:6px; padding:5px 12px;
+  background:var(--bg2); border-bottom:1px solid var(--border); flex-shrink:0;
+  flex-wrap:wrap;
+}
+.logo     { font-size:13px; font-weight:800; color:var(--amber); letter-spacing:-.2px; }
+.logo-sub { font-size:8px; color:var(--muted); }
+.h-sep    { width:1px; height:18px; background:var(--border); flex-shrink:0; }
+.hbtn {
+  padding:3px 9px; background:var(--bg3); border:1px solid var(--border);
+  color:var(--muted); font-family:var(--mono); font-size:9px;
+  cursor:pointer; transition:all var(--t); white-space:nowrap;
+}
+.hbtn:hover     { border-color:var(--amber); color:var(--amber); }
+.hbtn.pri       { background:var(--aglow); border-color:var(--adim); color:var(--amber); }
+.hbtn.pri:hover { border-color:var(--amber); }
+.hbtn.on        { background:var(--tglow); border-color:var(--tdim); color:var(--teal); }
+.hbtn.on:hover  { border-color:var(--teal); }
+.h-push { margin-left:auto; }
+
+/* ── WORKSPACE ───────────────────────────────────────────── */
+#workspace {
+  flex:1; display:grid; min-height:0; overflow:hidden;
+  grid-template-columns: 200px 1fr 220px;
+}
+
+/* ── PANELS ──────────────────────────────────────────────── */
+.panel { background:var(--bg2); display:flex; flex-direction:column; overflow:hidden; }
+.panel.left  { border-right:1px solid var(--border); }
+.panel.right { border-left:1px solid var(--border); }
+.p-hdr {
+  padding:5px 10px; font-size:9px; font-weight:700; color:var(--muted);
+  letter-spacing:.12em; text-transform:uppercase;
+  border-bottom:1px solid var(--border); flex-shrink:0;
+  display:flex; align-items:center; justify-content:space-between;
+}
+.p-body { flex:1; overflow-y:auto; padding:8px; min-height:0; }
+.p-sect { border-top:1px solid var(--border); flex-shrink:0; }
+.p-sect-body { padding:8px; }
+
+/* ── LIBRARY ─────────────────────────────────────────────── */
+.load-btn {
+  display:block; width:100%; padding:5px 8px; margin-bottom:8px;
+  background:var(--aglow); border:1px dashed var(--adim); color:var(--amber);
+  font-family:var(--mono); font-size:10px; cursor:pointer; transition:all var(--t);
+}
+.load-btn:hover { border-color:var(--amber); }
+.mc { padding:6px 8px; margin-bottom:4px; background:var(--bg3); border:1px solid var(--border); }
+.mc-name { font-size:10px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.mc-dim  { font-size:9px; color:var(--muted); margin-top:1px; }
+.mc-place {
+  margin-top:5px; padding:2px 7px; background:transparent;
+  border:1px solid var(--adim); color:var(--amber);
+  font-family:var(--mono); font-size:9px; cursor:pointer; transition:all var(--t);
+}
+.mc-place:hover { background:var(--aglow); border-color:var(--amber); }
+
+/* ── ENVIRONMENT ─────────────────────────────────────────── */
+.env-select {
+  width:100%; background:var(--bg3); border:1px solid var(--border);
+  color:var(--text); font-family:var(--mono); font-size:10px;
+  padding:3px 5px; outline:none; margin-bottom:6px; transition:border-color var(--t);
+  appearance:none; -webkit-appearance:none;
+}
+.env-select:focus { border-color:var(--amber); }
+.env-stat { font-size:9px; color:var(--muted); margin-bottom:6px; }
+
+/* ── SCENE ───────────────────────────────────────────────── */
+#scene-wrap { position:relative; overflow:hidden; background:var(--bg); }
+#cv { display:block; cursor:grab; }
+#cv.grabbing  { cursor:grabbing; }
+#cv.crosshair { cursor:crosshair; }
+#empty-hint {
+  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+  text-align:center; color:var(--muted); font-size:11px;
+  pointer-events:none; line-height:2;
+}
+#empty-hint b { display:block; font-size:14px; color:var(--border); margin-bottom:6px; }
+
+/* ── PROPERTIES ──────────────────────────────────────────── */
+.pr-none { font-size:10px; color:var(--muted); }
+.pr-name { font-size:10px; color:var(--text); margin-bottom:2px; word-break:break-all; }
+.pr-dim  { font-size:9px; color:var(--muted); margin-bottom:10px; }
+.pr-sec  { font-size:9px; color:var(--adim); text-transform:uppercase; letter-spacing:.1em; margin:10px 0 5px; }
+.pr-row  { display:flex; align-items:center; gap:5px; margin-bottom:5px; }
+.pr-lbl  { font-size:9px; color:var(--muted); width:20px; text-align:right; flex-shrink:0; }
+.pr-inp  {
+  flex:1; background:var(--bg3); border:1px solid var(--border);
+  color:var(--text); font-family:var(--mono); font-size:10px;
+  padding:2px 5px; outline:none; min-width:0; transition:border-color var(--t);
+}
+.pr-inp:focus { border-color:var(--amber); }
+.pr-hint { font-size:9px; color:var(--muted); margin-top:10px; line-height:1.8; }
+.del-btn {
+  width:100%; padding:4px; margin-top:6px; background:transparent;
+  border:1px solid #3d1a1a; color:var(--err);
+  font-family:var(--mono); font-size:9px; cursor:pointer; transition:all var(--t);
+}
+.del-btn:hover { background:rgba(248,113,113,.08); border-color:var(--err); }
+
+/* ── STATUS ──────────────────────────────────────────────── */
+#status {
+  padding:3px 12px; background:var(--bg2); border-top:1px solid var(--border);
+  font-size:9px; color:var(--muted); flex-shrink:0;
+  display:flex; align-items:center; gap:14px; overflow:hidden;
+}
+#st-sel  { color:var(--amber); white-space:nowrap; }
+#st-mode { color:var(--teal); white-space:nowrap; }
+#st-hint { margin-left:auto; opacity:.45; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header>
+    <div>
+      <div class="logo">Slice Studio</div>
+      <div class="logo-sub">v0.3 · ConsciousNode SoftWorks</div>
+    </div>
+    <div class="h-sep"></div>
+    <button class="hbtn" id="btn-new">New</button>
+    <button class="hbtn" id="btn-load">Load .sost</button>
+    <div class="h-sep"></div>
+    <button class="hbtn" id="btn-cam-mode">ORBIT</button>
+    <button class="hbtn" id="btn-focus">FOCUS</button>
+    <button class="hbtn" id="btn-draw-mode">DRAW ✏</button>
+    <div class="h-push"></div>
+    <button class="hbtn pri" id="btn-save">Save .sost</button>
+    <input type="file" id="fi-soli" accept=".soli" style="display:none">
+    <input type="file" id="fi-sost" accept=".sost" style="display:none">
+  </header>
+
+  <div id="workspace">
+
+    <!-- LEFT: library + environment -->
+    <div class="panel left">
+      <div class="p-hdr">
+        <span>Library</span>
+        <span id="lib-count" style="color:var(--border)">0</span>
+      </div>
+      <div class="p-body">
+        <button class="load-btn" id="btn-add-soli">+ Load .soli model</button>
+        <div id="lib-list"></div>
+      </div>
+      <div class="p-sect">
+        <div class="p-hdr"><span>Environment</span></div>
+        <div class="p-sect-body">
+          <select class="env-select" id="env-preset">
+            <option value="none">None</option>
+            <option value="floor">Floor (64×64)</option>
+            <option value="room_small">Room S (32×32, h16)</option>
+            <option value="room_large">Room L (64×64, h24)</option>
+          </select>
+          <div class="env-stat" id="env-vct">0 terrain voxels</div>
+          <button class="del-btn" id="btn-clear-terrain">Clear Terrain</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CENTER: viewport -->
+    <div id="scene-wrap">
+      <canvas id="cv"></canvas>
+      <div id="empty-hint">
+        <b>Scene is empty</b>
+        Load a .soli in the Library panel<br>
+        then click Place to add it here
+      </div>
+    </div>
+
+    <!-- RIGHT: properties -->
+    <div class="panel right">
+      <div class="p-hdr">Properties</div>
+      <div class="p-body" id="props">
+        <div class="pr-none">Click an instance in the scene to select it.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div id="status">
+    <span id="st-inst">0 instances</span>
+    <span id="st-sel"></span>
+    <span id="st-mode"></span>
+    <span id="st-hint"></span>
+  </div>
+
+</div>
+<script>
+
+// ════════════════════════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════════════════════════
+const S = {
+  models:    [],
+  instances: [],
+  selected:  null,
+  nextId:    0,
+  cam: {
+    rotY: 0.52, rotX: -0.62, zoom: 1.0, panX: 0, panY: 0,
+    mode: 'orbit',   // 'orbit' | 'free'
+    wx: 0, wy: 0, wz: 0,  // world-space camera pivot (free mode translation)
+  },
+  env: {
+    preset: 'none',
+    terrain: new Map(),   // Map<"x,z", true>  — terrain voxels at y=0
+  },
+  drawMode:  false,
+};
+
+// ════════════════════════════════════════════════════════════════
+//  CANVAS
+// ════════════════════════════════════════════════════════════════
+const cv     = document.getElementById('cv');
+const pickCv = document.createElement('canvas');
+
+// ════════════════════════════════════════════════════════════════
+//  MATH
+// ════════════════════════════════════════════════════════════════
+
+// Rotate a vector by Y then X then Z (Euler YXZ)
+function rotVec(x, y, z, rX, rY, rZ) {
+  let x1 = x * Math.cos(rY) + z * Math.sin(rY), y1 = y, z1 = -x * Math.sin(rY) + z * Math.cos(rY);
+  let x2 = x1, y2 = y1 * Math.cos(rX) - z1 * Math.sin(rX), z2 = y1 * Math.sin(rX) + z1 * Math.cos(rX);
+  let x3 = x2 * Math.cos(rZ) - y2 * Math.sin(rZ), y3 = x2 * Math.sin(rZ) + y2 * Math.cos(rZ);
+  return [x3, y3, z2];
+}
+
+// Project world-relative point → screen (orthographic)
+function projectPt(wx, wy, wz, camY, camX, CELL, OX, OY) {
+  const cY = Math.cos(camY), sY = Math.sin(camY);
+  const rx  =  wx * cY + wz * sY;
+  const rz  = -wx * sY + wz * cY;
+  const cX  = Math.cos(camX), sX = Math.sin(camX);
+  const ry_f = wy * cX - rz * sX;
+  return { sx: rx * CELL + OX, sy: -ry_f * CELL + OY };
+}
+
+// Camera-space depth (larger = further back = draw first)
+function depthOf(wx, wy, wz, camY, camX) {
+  const cY = Math.cos(camY), sY = Math.sin(camY);
+  const rz  = -wx * sY + wz * cY;
+  const cX  = Math.cos(camX), sX = Math.sin(camX);
+  return wy * sX + rz * cX;
+}
+
+function adjColor(hex, f) {
+  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  const t = Math.abs(f) * 0.55, blend = f >= 0 ? 255 : 0;
+  return `rgb(${Math.round(r+(blend-r)*t)},${Math.round(g+(blend-g)*t)},${Math.round(b+(blend-b)*t)})`;
+}
+
+function pickEnc(i)     { return `rgb(${(i>>8)&0xFF},${i&0xFF},200)`; }
+function pickDec(r,g,b) { return b === 200 ? (r << 8) | g : -1; }
+
+// Unproject screen click → world y=0 plane (accounts for cam world offset)
+function unprojectToGround(sx, sy) {
+  const { rotY, rotX, zoom, panX, panY, wx: CX, wy: CY, wz: CZ } = S.cam;
+  const W = cv.width, H = cv.height;
+  const CELL = Math.max(1, Math.floor(Math.min(W, H) / (64 * 2.2) * zoom));
+  const OX = W / 2 + panX, OY = H / 2 + panY;
+  const sX = Math.sin(rotX);
+  if (Math.abs(sX) < 0.01) return null; // camera too flat
+  const cX = Math.cos(rotX), cY = Math.cos(rotY), sY = Math.sin(rotY);
+  const rx   = (sx - OX) / CELL;
+  const ry_f = (OY - sy) / CELL;
+  // Solve for world (wx,wz) given wy=0:
+  // rz = (-CY*cX - ry_f) / sX
+  const rz = (-CY * cX - ry_f) / sX;
+  const u  = rx * cY - rz * sY;  // wx - CX
+  const v  = rx * sY + rz * cY;  // wz - CZ
+  return { x: Math.floor(u + CX), z: Math.floor(v + CZ) };
+}
+
+// ════════════════════════════════════════════════════════════════
+//  SOLI PARSER
+// ════════════════════════════════════════════════════════════════
+function parseSoli(json, name) {
+  const d = typeof json === 'string' ? JSON.parse(json) : json;
+  if (d.magic !== 'SOLI') throw new Error('Not a .soli file');
+  const bin = atob(d.voxels);
+  const voxels = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) voxels[i] = bin.charCodeAt(i);
+  const model = {
+    name: name || 'model.soli', soli: d, voxels,
+    RX: d.resolution.x, RY: d.resolution.y, RZ: d.resolution.z,
+    materials: d.materials || [], surf: null,
+  };
+  buildSurf(model);
+  return model;
+}
+
+function getV(model, gx, gy, gz) {
+  if (gx < 0 || gy < 0 || gz < 0 || gx >= model.RX || gy >= model.RY || gz >= model.RZ) return 0;
+  return model.voxels[gx + gy * model.RX + gz * model.RX * model.RY];
+}
+
+function buildSurf(model) {
+  const { RX, RY, RZ } = model;
+  const surf = [];
+  for (let gz = 0; gz < RZ; gz++)
+    for (let gy = 0; gy < RY; gy++)
+      for (let gx = 0; gx < RX; gx++) {
+        const m = getV(model, gx, gy, gz);
+        if (!m) continue;
+        if (!getV(model,gx+1,gy,gz) || !getV(model,gx-1,gy,gz) ||
+            !getV(model,gx,gy+1,gz) || !getV(model,gx,gy-1,gz) ||
+            !getV(model,gx,gy,gz+1) || !getV(model,gx,gy,gz-1))
+          surf.push({ gx, gy, gz, m });
+      }
+  model.surf = surf;
+}
+
+// ════════════════════════════════════════════════════════════════
+//  SOST v0.3 EXPORT / IMPORT
+// ════════════════════════════════════════════════════════════════
+function exportSost() {
+  const data = {
+    format: 'sost', version: '0.3',
+    created: new Date().toISOString(),
+    camera: { ...S.cam },
+    environment: {
+      preset: S.env.preset,
+      terrain: [...S.env.terrain.keys()].map(k => k.split(',').map(Number)),
+    },
+    library:   S.models.map(m => ({ name: m.name, soli: m.soli })),
+    instances: S.instances.map(i => ({
+      ...i,
+      joint_states: i.joint_states || [],  // stub — populated by posing in v0.4
+    })),
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/octet-stream' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = 'scene.sost'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importSost(json) {
+  const d = JSON.parse(json);
+  if (d.format !== 'sost') throw new Error('Not a .sost file');
+  S.models = []; S.instances = []; S.selected = null; S.nextId = 0;
+
+  // Camera — graceful v0.2 compat (new fields default to 0/'orbit')
+  if (d.camera) {
+    Object.assign(S.cam, {
+      rotY: 0.52, rotX: -0.62, zoom: 1.0, panX: 0, panY: 0,
+      mode: 'orbit', wx: 0, wy: 0, wz: 0,
+    }, d.camera);
+  }
+
+  // Environment — v0.2 files have no env block
+  S.env.preset  = d.environment?.preset  ?? 'none';
+  S.env.terrain = new Map();
+  for (const [x, z] of (d.environment?.terrain ?? [])) {
+    S.env.terrain.set(`${x},${z}`, true);
+  }
+
+  for (const e of (d.library   || [])) S.models.push(parseSoli(e.soli, e.name));
+  for (const i of (d.instances || [])) {
+    S.instances.push({
+      id: i.id, modelIdx: i.modelIdx,
+      x: i.x||0, y: i.y||0, z: i.z||0,
+      rotX: i.rotX||0, rotY: i.rotY||0, rotZ: i.rotZ||0,
+      joint_states: i.joint_states || [],
+    });
+    if (i.id >= S.nextId) S.nextId = i.id + 1;
+  }
+  syncEnvUI();
+}
+
+// ════════════════════════════════════════════════════════════════
+//  SCENE MANAGEMENT
+// ════════════════════════════════════════════════════════════════
+function addInstance(modelIdx) {
+  const inst = {
+    id: S.nextId++, modelIdx,
+    x: 0, y: 0, z: 0,
+    rotX: 0, rotY: 0, rotZ: 0,
+    joint_states: [],
+  };
+  S.instances.push(inst);
+  S.selected = inst.id;
+  updateAll();
+}
+
+function removeSelected() {
+  if (S.selected === null) return;
+  S.instances = S.instances.filter(i => i.id !== S.selected);
+  S.selected = null;
+  updateAll();
+}
+
+function getSelected() { return S.instances.find(i => i.id === S.selected) || null; }
+
+function moveSelected(dx, dy, dz) {
+  const i = getSelected(); if (!i) return;
+  i.x += dx; i.y += dy; i.z += dz;
+  updateProps(); updateStatus(); render();
+}
+
+function rotateSelected(axis, deg) {
+  const i = getSelected(); if (!i) return;
+  i[axis] = ((i[axis] * 180 / Math.PI) + deg) * Math.PI / 180;
+  updateProps(); render();
+}
+
+// ════════════════════════════════════════════════════════════════
+//  CAMERA
+// ════════════════════════════════════════════════════════════════
+function toggleCamMode() {
+  S.cam.mode = S.cam.mode === 'orbit' ? 'free' : 'orbit';
+  document.getElementById('btn-cam-mode').textContent = S.cam.mode === 'free' ? 'FREE' : 'ORBIT';
+  document.getElementById('btn-cam-mode').classList.toggle('on', S.cam.mode === 'free');
+  updateStatus();
+  render();
+}
+
+function focusSelected() {
+  const inst = getSelected(); if (!inst) return;
+  const W = cv.width, H = cv.height;
+  const { rotY, rotX, zoom, wx: CX, wy: CY, wz: CZ } = S.cam;
+  const CELL = Math.max(1, Math.floor(Math.min(W, H) / (64 * 2.2) * zoom));
+  // Camera-relative coords of instance pivot
+  const relX = inst.x - CX, relY = inst.y - CY, relZ = inst.z - CZ;
+  const cY = Math.cos(rotY), sY = Math.sin(rotY);
+  const rx = relX * cY + relZ * sY;
+  const rz = -relX * sY + relZ * cY;
+  const ry_f = relY * Math.cos(rotX) - rz * Math.sin(rotX);
+  // Set pan so instance appears at screen centre
+  S.cam.panX = -rx * CELL;
+  S.cam.panY =  ry_f * CELL;
+  render();
+}
+
+function moveCam(dx, dy, dz) {
+  // Move camera world pivot in camera-forward–right–up directions
+  const { rotY } = S.cam;
+  const cY = Math.cos(rotY), sY = Math.sin(rotY);
+  // forward (−Z camera) in world XZ: (sY, 0, cY)... wait:
+  // camera X-axis in world: (cY, 0, sY)  (from rx = wx*cY + wz*sY)
+  // camera forward (-Z) in world: (−sY, 0, cY)
+  S.cam.wx += cY * dx - sY * dz;
+  S.cam.wy += dy;
+  S.cam.wz += sY * dx + cY * dz;
+  render();
+}
+
+// ════════════════════════════════════════════════════════════════
+//  TERRAIN
+// ════════════════════════════════════════════════════════════════
+const tKey = (x, z) => `${x},${z}`;
+
+function placeTerrain(x, z)  {
+  S.env.terrain.set(tKey(x, z), true);
+  updateEnvStat(); render();
+}
+
+function eraseTerrain(x, z) {
+  S.env.terrain.delete(tKey(x, z));
+  updateEnvStat(); render();
+}
+
+function updateEnvStat() {
+  document.getElementById('env-vct').textContent =
+    `${S.env.terrain.size} terrain voxel${S.env.terrain.size !== 1 ? 's' : ''}`;
+}
+
+// ════════════════════════════════════════════════════════════════
+//  RENDERER
+// ════════════════════════════════════════════════════════════════
+let _raf = false;
+function render() { if (!_raf) { _raf = true; requestAnimationFrame(_render); } }
+
+function _render() {
+  _raf = false;
+  const W = cv.width, H = cv.height;
+  if (!W || !H) return;
+  const ctx  = cv.getContext('2d');
+  const { rotY, rotX, zoom, panX, panY, wx: CX, wy: CY, wz: CZ } = S.cam;
+  const CELL = Math.max(1, Math.floor(Math.min(W, H) / (64 * 2.2) * zoom));
+  const OX   = W / 2 + panX;
+  const OY   = H / 2 + panY;
+
+  ctx.fillStyle = '#0b0a0f';
+  ctx.fillRect(0, 0, W, H);
+
+  _drawGrid(ctx, rotY, rotX, CELL, OX, OY, CX, CY, CZ);
+  _drawEnvPreset(ctx, rotY, rotX, CELL, OX, OY, CX, CY, CZ);
+
+  // ── Collect all renderable voxels ──────────────────────────
+  const all = [];
+
+  // Instance voxels
+  for (let ii = 0; ii < S.instances.length; ii++) {
+    const inst  = S.instances[ii];
+    const model = S.models[inst.modelIdx];
+    if (!model?.surf) continue;
+    const cx = model.RX / 2, cz = model.RZ / 2;
+    for (const sv of model.surf) {
+      const lx = sv.gx - cx, ly = sv.gy, lz = sv.gz - cz;
+      const [rx, ry, rz] = rotVec(lx, ly, lz, inst.rotX, inst.rotY, inst.rotZ);
+      // Relative to camera world position
+      const wx = rx + inst.x - CX;
+      const wy = ry + inst.y - CY;
+      const wz = rz + inst.z - CZ;
+      all.push({ type: 'inst', gx: sv.gx, gy: sv.gy, gz: sv.gz, m: sv.m,
+                 wx, wy, wz, inst, ii, depth: depthOf(wx, wy, wz, rotY, rotX) });
+    }
+  }
+
+  // Terrain voxels (y=0 in world space)
+  const { terrain } = S.env;
+  for (const k of terrain.keys()) {
+    const [tx, tz] = k.split(',').map(Number);
+    const wx = tx - CX, wy = -CY, wz = tz - CZ;
+    all.push({ type: 'terrain', tx, tz, wx, wy, wz,
+               depth: depthOf(wx, wy, wz, rotY, rotX) });
+  }
+
+  // Back-to-front
+  all.sort((a, b) => b.depth - a.depth);
+
+  // Pick buffer
+  pickCv.width = W; pickCv.height = H;
+  const pCtx = pickCv.getContext('2d');
+  pCtx.fillStyle = '#000'; pCtx.fillRect(0, 0, W, H);
+
+  // ── Draw voxels ────────────────────────────────────────────
+  for (const v of all) {
+    if (v.type === 'terrain') {
+      _drawTerrainVoxel(ctx, v, terrain, rotY, rotX, CELL, OX, OY, CX, CY, CZ);
+      continue;
+    }
+
+    // Instance voxel
+    const { inst, ii, wx, wy, wz, gx, gy, gz, m } = v;
+    const model  = S.models[inst.modelIdx];
+    const col    = model.materials[m]?.color ?? '#888888';
+    const isSel  = inst.id === S.selected;
+
+    const P = (dx, dy, dz) => {
+      const [rx, ry, rz] = rotVec(dx, dy, dz, inst.rotX, inst.rotY, inst.rotZ);
+      return projectPt(wx + rx, wy + ry, wz + rz, rotY, rotX, CELL, OX, OY);
+    };
+
+    const p000=P(0,0,0), p100=P(1,0,0), p010=P(0,1,0), p110=P(1,1,0);
+    const p001=P(0,0,1), p101=P(1,0,1), p011=P(0,1,1), p111=P(1,1,1);
+    const pc = pickEnc(ii);
+
+    const drawFace = (bright, pts) => {
+      let c = adjColor(col, bright);
+      if (isSel) c = adjColor(c, 0.18);
+      ctx.fillStyle = c;
+      ctx.beginPath(); ctx.moveTo(pts[0].sx, pts[0].sy);
+      for (let j = 1; j < pts.length; j++) ctx.lineTo(pts[j].sx, pts[j].sy);
+      ctx.closePath(); ctx.fill();
+      pCtx.fillStyle = pc;
+      pCtx.beginPath(); pCtx.moveTo(pts[0].sx, pts[0].sy);
+      for (let j = 1; j < pts.length; j++) pCtx.lineTo(pts[j].sx, pts[j].sy);
+      pCtx.closePath(); pCtx.fill();
+    };
+
+    if (!getV(model, gx,   gy+1, gz  )) drawFace( 0.30, [p010,p110,p111,p011]);
+    if (!getV(model, gx-1, gy,   gz  )) drawFace( 0.10, [p000,p010,p011,p001]);
+    if (!getV(model, gx,   gy,   gz-1)) drawFace( 0.15, [p000,p100,p110,p010]);
+    if (!getV(model, gx+1, gy,   gz  )) drawFace( 0.00, [p100,p110,p111,p101]);
+    if (!getV(model, gx,   gy,   gz+1)) drawFace(-0.20, [p001,p101,p111,p011]);
+    if (!getV(model, gx,   gy-1, gz  )) drawFace(-0.40, [p000,p100,p101,p001]);
+
+    if (isSel) {
+      const o = projectPt(inst.x - CX, inst.y - CY, inst.z - CZ, rotY, rotX, CELL, OX, OY);
+      ctx.fillStyle = 'rgba(200,155,74,0.9)';
+      ctx.beginPath(); ctx.arc(o.sx, o.sy, 3.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#0b0a0f';
+      ctx.beginPath(); ctx.arc(o.sx, o.sy, 1.5, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  const showEmpty = !S.instances.length && !S.env.terrain.size;
+  document.getElementById('empty-hint').style.display = showEmpty ? 'block' : 'none';
+}
+
+// Draw a single terrain voxel (1×1×1 at world y=0)
+function _drawTerrainVoxel(ctx, v, terrain, rotY, rotX, CELL, OX, OY, CX, CY, CZ) {
+  const { tx, tz, wx, wy, wz } = v;
+  const COL = '#5a5878';
+  const P = (dx, dy, dz) => projectPt(wx+dx, wy+dy, wz+dz, rotY, rotX, CELL, OX, OY);
+  const p000=P(0,0,0), p100=P(1,0,0), p010=P(0,1,0), p110=P(1,1,0);
+  const p001=P(0,0,1), p101=P(1,0,1), p011=P(0,1,1), p111=P(1,1,1);
+
+  const df = (bright, pts) => {
+    ctx.fillStyle = adjColor(COL, bright);
+    ctx.beginPath(); ctx.moveTo(pts[0].sx, pts[0].sy);
+    for (let j = 1; j < pts.length; j++) ctx.lineTo(pts[j].sx, pts[j].sy);
+    ctx.closePath(); ctx.fill();
+  };
+
+  // Top: always exposed
+  df( 0.30, [p010, p110, p111, p011]);
+  // Sides: only if no adjacent terrain
+  if (!terrain.has(tKey(tx-1, tz))) df( 0.10, [p000, p010, p011, p001]);
+  if (!terrain.has(tKey(tx,   tz-1))) df( 0.15, [p000, p100, p110, p010]);
+  if (!terrain.has(tKey(tx+1, tz))) df( 0.00, [p100, p110, p111, p101]);
+  if (!terrain.has(tKey(tx,   tz+1))) df(-0.20, [p001, p101, p111, p011]);
+}
+
+// World reference grid (128-unit radius, fixed at world origin)
+function _drawGrid(ctx, rotY, rotX, CELL, OX, OY, CX, CY, CZ) {
+  const HALF = 128, STEP = 8;
+  const proj = (wx, wz) => projectPt(wx - CX, 0 - CY, wz - CZ, rotY, rotX, CELL, OX, OY);
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.025)'; ctx.lineWidth = 0.5;
+  for (let i = -HALF; i <= HALF; i += STEP) {
+    const a = proj(i, -HALF), b = proj(i,  HALF);
+    ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy); ctx.stroke();
+    const c = proj(-HALF, i), d = proj( HALF, i);
+    ctx.beginPath(); ctx.moveTo(c.sx, c.sy); ctx.lineTo(d.sx, d.sy); ctx.stroke();
+  }
+  // World origin axes
+  ctx.strokeStyle = 'rgba(74,184,200,0.18)'; ctx.lineWidth = 1;
+  const ax1 = proj(-HALF, 0), ax2 = proj(HALF, 0);
+  ctx.beginPath(); ctx.moveTo(ax1.sx, ax1.sy); ctx.lineTo(ax2.sx, ax2.sy); ctx.stroke();
+  const az1 = proj(0, -HALF), az2 = proj(0,  HALF);
+  ctx.beginPath(); ctx.moveTo(az1.sx, az1.sy); ctx.lineTo(az2.sx, az2.sy); ctx.stroke();
+}
+
+// Environment preset: floor / room walls as flat shaded quads (background pass)
+function _drawEnvPreset(ctx, rotY, rotX, CELL, OX, OY, CX, CY, CZ) {
+  const preset = S.env.preset;
+  if (preset === 'none') return;
+
+  const isRoom = preset === 'room_small' || preset === 'room_large';
+  const hf     = preset === 'room_large' ? 32 : 16;  // half-size (floor extends ±hf)
+  const wallH  = preset === 'room_large' ? 24 : 16;
+
+  const P = (wx, wy, wz) => projectPt(wx - CX, wy - CY, wz - CZ, rotY, rotX, CELL, OX, OY);
+
+  // Floor at y = -1
+  const fl = P(-hf,-1,-hf), fr = P( hf,-1,-hf);
+  const bl = P(-hf,-1, hf), br = P( hf,-1, hf);
+  ctx.fillStyle = '#131226';
+  ctx.beginPath();
+  ctx.moveTo(fl.sx,fl.sy); ctx.lineTo(fr.sx,fr.sy);
+  ctx.lineTo(br.sx,br.sy); ctx.lineTo(bl.sx,bl.sy);
+  ctx.closePath(); ctx.fill();
+
+  // Floor grid
+  ctx.strokeStyle = 'rgba(255,255,255,0.05)'; ctx.lineWidth = 0.5;
+  for (let i = -hf; i <= hf; i += 4) {
+    const a = P(i, -1, -hf), b = P(i, -1,  hf);
+    ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy); ctx.stroke();
+    const c = P(-hf, -1, i), d = P( hf, -1, i);
+    ctx.beginPath(); ctx.moveTo(c.sx, c.sy); ctx.lineTo(d.sx, d.sy); ctx.stroke();
+  }
+
+  if (!isRoom) return;
+
+  // Room walls — drawn as background quads (may clip; acceptable for stage ref)
+  const wallDefs = [
+    { corners: [P(-hf,-1,-hf), P( hf,-1,-hf), P( hf,wallH,-hf), P(-hf,wallH,-hf)], bright:-0.10 },
+    { corners: [P(-hf,-1, hf), P( hf,-1, hf), P( hf,wallH, hf), P(-hf,wallH, hf)], bright:-0.20 },
+    { corners: [P(-hf,-1,-hf), P(-hf,-1, hf), P(-hf,wallH, hf), P(-hf,wallH,-hf)], bright:-0.15 },
+    { corners: [P( hf,-1,-hf), P( hf,-1, hf), P( hf,wallH, hf), P( hf,wallH,-hf)], bright:-0.05 },
+  ];
+  for (const { corners, bright } of wallDefs) {
+    ctx.fillStyle = adjColor('#1a1830', bright);
+    ctx.beginPath(); ctx.moveTo(corners[0].sx, corners[0].sy);
+    for (let j = 1; j < corners.length; j++) ctx.lineTo(corners[j].sx, corners[j].sy);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(74,184,200,0.06)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(corners[0].sx, corners[0].sy);
+    for (let j = 1; j < corners.length; j++) ctx.lineTo(corners[j].sx, corners[j].sy);
+    ctx.closePath(); ctx.stroke();
+  }
+}
+
+function pickAt(x, y) {
+  const d  = pickCv.getContext('2d').getImageData(x|0, y|0, 1, 1).data;
+  const ii = pickDec(d[0], d[1], d[2]);
+  return (ii >= 0 && ii < S.instances.length) ? S.instances[ii] : null;
+}
+
+// ════════════════════════════════════════════════════════════════
+//  UI UPDATES
+// ════════════════════════════════════════════════════════════════
+function updateAll() { updateLib(); updateProps(); updateStatus(); updateEnvStat(); render(); }
+
+function updateLib() {
+  document.getElementById('lib-count').textContent = S.models.length;
+  const el = document.getElementById('lib-list');
+  el.innerHTML = '';
+  S.models.forEach((m, idx) => {
+    const card = document.createElement('div');
+    card.className = 'mc';
+    card.innerHTML = `
+      <div class="mc-name" title="${m.name}">${m.name}</div>
+      <div class="mc-dim">${m.RX} × ${m.RY} × ${m.RZ}</div>
+      <button class="mc-place" data-idx="${idx}">Place in scene</button>
+    `;
+    card.querySelector('.mc-place').addEventListener('click', () => addInstance(idx));
+    el.appendChild(card);
+  });
+}
+
+function updateProps() {
+  const el   = document.getElementById('props');
+  const inst = getSelected();
+  if (!inst) {
+    el.innerHTML = S.drawMode
+      ? `<div class="pr-none">Draw mode active.<br><br>Left-click to place terrain voxels.<br>Right-click to erase.</div>`
+      : `<div class="pr-none">Click an instance in the scene to select it.</div>`;
+    return;
+  }
+  const m  = S.models[inst.modelIdx];
+  const rd = v => Math.round(v * 180 / Math.PI);
+  el.innerHTML = `
+    <div class="pr-name">${m ? m.name : '?'}</div>
+    ${m ? `<div class="pr-dim">${m.RX} × ${m.RY} × ${m.RZ} voxels</div>` : ''}
+    <div class="pr-sec">Position</div>
+    <div class="pr-row"><span class="pr-lbl">X</span><input class="pr-inp" id="pr-x" type="number" value="${inst.x}" step="1"></div>
+    <div class="pr-row"><span class="pr-lbl">Y</span><input class="pr-inp" id="pr-y" type="number" value="${inst.y}" step="1"></div>
+    <div class="pr-row"><span class="pr-lbl">Z</span><input class="pr-inp" id="pr-z" type="number" value="${inst.z}" step="1"></div>
+    <div class="pr-sec">Rotation</div>
+    <div class="pr-row"><span class="pr-lbl">Y°</span><input class="pr-inp" id="pr-ry" type="number" value="${rd(inst.rotY)}" step="45"></div>
+    <div class="pr-row"><span class="pr-lbl">X°</span><input class="pr-inp" id="pr-rx" type="number" value="${rd(inst.rotX)}" step="45"></div>
+    <div class="pr-row"><span class="pr-lbl">Z°</span><input class="pr-inp" id="pr-rz" type="number" value="${rd(inst.rotZ)}" step="45"></div>
+    <div class="pr-hint">
+      Q/E — yaw (Y) · R/F — pitch (X)<br>
+      T/G — roll (Z) · Arrows — move<br>
+      PgUp/Dn — Y · Shift ×8<br>
+      ${S.cam.mode === 'free' ? 'WASD — camera XZ' : ''}
+    </div>
+    <button class="del-btn" id="pr-del">Remove from scene</button>
+  `;
+  const toRad = v => +v * Math.PI / 180;
+  document.getElementById('pr-x').addEventListener('change',  e => { inst.x    = +e.target.value; render(); updateStatus(); });
+  document.getElementById('pr-y').addEventListener('change',  e => { inst.y    = +e.target.value; render(); updateStatus(); });
+  document.getElementById('pr-z').addEventListener('change',  e => { inst.z    = +e.target.value; render(); updateStatus(); });
+  document.getElementById('pr-ry').addEventListener('change', e => { inst.rotY = toRad(e.target.value); render(); });
+  document.getElementById('pr-rx').addEventListener('change', e => { inst.rotX = toRad(e.target.value); render(); });
+  document.getElementById('pr-rz').addEventListener('change', e => { inst.rotZ = toRad(e.target.value); render(); });
+  document.getElementById('pr-del').addEventListener('click', removeSelected);
+}
+
+function updateStatus() {
+  document.getElementById('st-inst').textContent =
+    `${S.instances.length} instance${S.instances.length !== 1 ? 's' : ''}`;
+  const inst = getSelected();
+  document.getElementById('st-sel').textContent = inst
+    ? `Selected: ${S.models[inst.modelIdx]?.name ?? '?'} @ (${inst.x}, ${inst.y}, ${inst.z})`
+    : '';
+  const modeLabel = S.drawMode ? 'DRAW' : S.cam.mode.toUpperCase();
+  document.getElementById('st-mode').textContent = modeLabel;
+  document.getElementById('st-hint').textContent = S.drawMode
+    ? 'Left-click: place terrain · Right-click: erase · Right-drag: pan · Scroll: zoom'
+    : S.cam.mode === 'free'
+      ? 'Drag: orbit · Right-drag: pan · Scroll: zoom · WASD: camera XZ · Arrows: move instance'
+      : 'Drag: orbit · Right-drag: pan · Scroll: zoom · Arrows: move · Q/E: yaw · R/F: pitch · T/G: roll';
+}
+
+function syncEnvUI() {
+  document.getElementById('env-preset').value = S.env.preset;
+  updateEnvStat();
+}
+
+// ════════════════════════════════════════════════════════════════
+//  CANVAS RESIZE
+// ════════════════════════════════════════════════════════════════
+function resizeCv() {
+  const wrap = document.getElementById('scene-wrap');
+  cv.width   = wrap.clientWidth;
+  cv.height  = wrap.clientHeight;
+  render();
+}
+
+// ════════════════════════════════════════════════════════════════
+//  EVENTS — CANVAS MOUSE
+// ════════════════════════════════════════════════════════════════
+const drag = { active: false, right: false, lx: 0, ly: 0, moved: false };
+
+cv.addEventListener('mousedown', e => {
+  drag.active = true; drag.right = e.button === 2;
+  drag.lx = e.clientX; drag.ly = e.clientY; drag.moved = false;
+  if (!drag.right) cv.classList.add('grabbing');
+  e.preventDefault();
+
+  // Draw mode: immediate place/erase on mousedown
+  if (S.drawMode) {
+    const r = cv.getBoundingClientRect();
+    const pt = unprojectToGround(e.clientX - r.left, e.clientY - r.top);
+    if (pt) {
+      drag.drawErase = drag.right;
+      drag.right ? eraseTerrain(pt.x, pt.z) : placeTerrain(pt.x, pt.z);
+    }
+  }
+});
+
+window.addEventListener('mousemove', e => {
+  if (!drag.active) return;
+  const dx = e.clientX - drag.lx, dy = e.clientY - drag.ly;
+  drag.lx = e.clientX; drag.ly = e.clientY;
+  if (Math.abs(dx) > 1 || Math.abs(dy) > 1) drag.moved = true;
+
+  if (S.drawMode) {
+    // In draw mode: right-drag pans; left-drag continues terrain paint
+    if (drag.right) {
+      S.cam.panX += dx; S.cam.panY += dy; render();
+    } else {
+      const r  = cv.getBoundingClientRect();
+      const pt = unprojectToGround(e.clientX - r.left, e.clientY - r.top);
+      if (pt) { drag.drawErase ? eraseTerrain(pt.x, pt.z) : placeTerrain(pt.x, pt.z); }
+    }
+    return;
+  }
+
+  // SCENE mode
+  if (drag.right) {
+    S.cam.panX += dx; S.cam.panY += dy;
+  } else {
+    S.cam.rotY += dx * 0.013;
+    S.cam.rotX  = Math.max(-Math.PI / 2 + 0.05, Math.min(-0.05, S.cam.rotX + dy * 0.013));
+  }
+  render();
+});
+
+window.addEventListener('mouseup', e => {
+  if (!drag.active) return;
+  cv.classList.remove('grabbing');
+
+  if (!S.drawMode && !drag.right && !drag.moved) {
+    // Click to select instance (SCENE mode only)
+    const r    = cv.getBoundingClientRect();
+    const inst = pickAt(e.clientX - r.left, e.clientY - r.top);
+    S.selected = inst ? inst.id : null;
+    updateProps(); updateStatus(); render();
+  }
+  drag.active = false;
+});
+
+cv.addEventListener('contextmenu', e => e.preventDefault());
+
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  S.cam.zoom = Math.max(0.15, Math.min(10, S.cam.zoom - e.deltaY * 0.001));
+  render();
+}, { passive: false });
+
+// ════════════════════════════════════════════════════════════════
+//  EVENTS — KEYBOARD
+// ════════════════════════════════════════════════════════════════
+window.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  const step = e.shiftKey ? 8 : 1;
+  const isFree = S.cam.mode === 'free';
+  const hasSel = S.selected !== null;
+
+  switch (e.key) {
+    // ── Instance movement (always) ──────────────────────────
+    case 'ArrowLeft':  moveSelected(-step, 0, 0);  e.preventDefault(); break;
+    case 'ArrowRight': moveSelected( step, 0, 0);  e.preventDefault(); break;
+    case 'ArrowUp':    moveSelected(0, 0, -step);  e.preventDefault(); break;
+    case 'ArrowDown':  moveSelected(0, 0,  step);  e.preventDefault(); break;
+    case 'PageUp':
+      if (isFree && !hasSel) { moveCam(0,  step, 0); e.preventDefault(); }
+      else                   { moveSelected(0,  step, 0); e.preventDefault(); }
+      break;
+    case 'PageDown':
+      if (isFree && !hasSel) { moveCam(0, -step, 0); e.preventDefault(); }
+      else                   { moveSelected(0, -step, 0); e.preventDefault(); }
+      break;
+
+    // ── Instance rotation ───────────────────────────────────
+    case 'q': case 'Q': rotateSelected('rotY', -45); break;
+    case 'e': case 'E': rotateSelected('rotY',  45); break;
+    case 'r': case 'R': rotateSelected('rotX', -45); break;
+    case 'f': case 'F': rotateSelected('rotX',  45); break;
+    case 't': case 'T': rotateSelected('rotZ', -45); break;
+    case 'g': case 'G': rotateSelected('rotZ',  45); break;
+
+    // ── Free camera XZ translation (WASD, free mode only) ──
+    case 'w': case 'W': if (isFree) { moveCam(0, 0,  step * 2); e.preventDefault(); } break;
+    case 's': case 'S': if (isFree) { moveCam(0, 0, -step * 2); e.preventDefault(); } break;
+    case 'a': case 'A': if (isFree) { moveCam(-step * 2, 0, 0); e.preventDefault(); } break;
+    case 'd': case 'D': if (isFree) { moveCam( step * 2, 0, 0); e.preventDefault(); } break;
+
+    // ── Remove ──────────────────────────────────────────────
+    case 'Delete': case 'Backspace': removeSelected(); break;
+  }
+});
+
+// ════════════════════════════════════════════════════════════════
+//  EVENTS — HEADER + ENV BUTTONS
+// ════════════════════════════════════════════════════════════════
+document.getElementById('btn-new').addEventListener('click', () => {
+  if ((S.instances.length || S.env.terrain.size) &&
+      !confirm('Start a new scene? Unsaved changes will be lost.')) return;
+  S.models = []; S.instances = []; S.selected = null; S.nextId = 0;
+  S.env.preset = 'none'; S.env.terrain = new Map();
+  Object.assign(S.cam, { rotY: 0.52, rotX: -0.62, zoom: 1.0, panX: 0, panY: 0,
+                          mode: 'orbit', wx: 0, wy: 0, wz: 0 });
+  document.getElementById('btn-cam-mode').textContent = 'ORBIT';
+  document.getElementById('btn-cam-mode').classList.remove('on');
+  S.drawMode = false;
+  cv.classList.remove('crosshair');
+  document.getElementById('btn-draw-mode').classList.remove('on');
+  syncEnvUI(); updateAll();
+});
+
+document.getElementById('btn-load').addEventListener('click', () =>
+  document.getElementById('fi-sost').click());
+
+document.getElementById('fi-sost').addEventListener('change', e => {
+  const file = e.target.files[0]; if (!file) return;
+  file.text().then(json => {
+    try { importSost(json); updateAll(); }
+    catch (err) { alert('Error loading .sost: ' + err.message); }
+  });
+  e.target.value = '';
+});
+
+document.getElementById('btn-save').addEventListener('click', exportSost);
+
+document.getElementById('btn-add-soli').addEventListener('click', () =>
+  document.getElementById('fi-soli').click());
+
+document.getElementById('fi-soli').addEventListener('change', e => {
+  const file = e.target.files[0]; if (!file) return;
+  file.text().then(json => {
+    try { S.models.push(parseSoli(json, file.name)); updateLib(); }
+    catch (err) { alert('Error loading .soli: ' + err.message); }
+  });
+  e.target.value = '';
+});
+
+document.getElementById('btn-cam-mode').addEventListener('click', toggleCamMode);
+document.getElementById('btn-focus').addEventListener('click', focusSelected);
+
+document.getElementById('btn-draw-mode').addEventListener('click', () => {
+  S.drawMode = !S.drawMode;
+  cv.classList.toggle('crosshair', S.drawMode);
+  document.getElementById('btn-draw-mode').classList.toggle('on', S.drawMode);
+  updateProps(); updateStatus();
+});
+
+document.getElementById('env-preset').addEventListener('change', e => {
+  S.env.preset = e.target.value;
+  render();
+});
+
+document.getElementById('btn-clear-terrain').addEventListener('click', () => {
+  if (!S.env.terrain.size) return;
+  if (confirm(`Clear all ${S.env.terrain.size} terrain voxels?`)) {
+    S.env.terrain = new Map();
+    updateEnvStat(); render();
+  }
+});
+
+// ════════════════════════════════════════════════════════════════
+//  INIT
+// ════════════════════════════════════════════════════════════════
+new ResizeObserver(resizeCv).observe(document.getElementById('scene-wrap'));
+resizeCv();
+updateAll();
+
+</script>
+</body>
+</html>

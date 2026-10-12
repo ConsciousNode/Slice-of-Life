@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Slice of Life — ConsciousNode SoftWorks</title>
+<title>Slice Suite — ConsciousNode SoftWorks</title>
 <style>
 :root {
   --bg:#0b0a0f; --bg2:#131120; --border:#2a2640;
@@ -17,7 +17,7 @@ html,body{
   font-family:var(--mono);display:flex;align-items:center;justify-content:center;
 }
 main{
-  max-width:480px;width:100%;padding:48px 32px;
+  max-width:560px;width:100%;padding:48px 32px;
   display:flex;flex-direction:column;gap:32px;
 }
 .wordmark{
@@ -50,32 +50,49 @@ main{
 .meta a{color:var(--muted);text-decoration:none;transition:color .15s;}
 .meta a:hover{color:var(--teal);}
 .meta .row{display:flex;gap:16px;flex-wrap:wrap;}
-.tag{
-  display:inline-block;padding:1px 6px;
-  border:1px solid var(--border);font-size:9px;
-  color:var(--muted);letter-spacing:.06em;
-}
-</style>
-</head>
-<body>
-<main>
+.tools{display:flex;flex-direction:column;gap:10px;}
+.tool{display:grid;grid-template-columns:1fr auto;gap:4px 12px;align-items:center;
+  padding:12px 14px;border:1p<main>
   <div class="wordmark">
-    <div class="title">Slice of Life</div>
-    <div class="sub">ConsciousNode SoftWorks · v0.2</div>
+    <div class="title">Slice Suite</div>
+    <div class="sub">ConsciousNode SoftWorks · model · compose · animate · simulate</div>
   </div>
 
   <p class="desc">
-    Volumetric voxel modeler. <em>No wireframes. No polygons.</em>
-    Build 3D models slice by slice — the way a 3D printer builds.
-    Physics-native geometry: the model is its own physics object
-    because it has actual interior structure.
+    A voxel modeling, scene, animation and physics pipeline that runs in a browser tab.
+    <em>You don't animate dice. You build dice, then you let go.</em>
+    Every voxel carries a real material, so a model is already a physics object.
   </p>
 
-  <a class="launch" href="./slice-of-life-v0.2.html">LAUNCH →</a>
+  <div class="flow">.soli → .sost → .soan → .soga</div>
+
+  <div class="tools">
+    <a class="tool" href="./slice-of-life-v0.3.html"><span class="n">Slice of Life</span><span class="v">v0.3 · .soli</span>
+      <span class="d">Volumetric modeler. Build slice by slice, with real materials and authored joints.</span></a>
+    <a class="tool" href="./slice-studio-v0.3.html"><span class="n">Slice Studio</span><span class="v">v0.3 · .sost</span>
+      <span class="d">Scene composer. Place models, draw terrain, frame the camera.</span></a>
+    <a class="tool" href="./slice-and-dice-v0.3.html"><span class="n">Slice and Dice</span><span class="v">v0.3 · .soan</span>
+      <span class="d">Animation studio. Set the throw, preview it with the Engine's own physics, export.</span></a>
+    <a class="tool" href="./sliceworks-engine-v0.4.html"><span class="n">SliceWorks Engine</span><span class="v">v0.4 · .soga</span>
+      <span class="d">Physics engine and runtime. Rigid, soft, gas, fracture and joints, read from the materials.</span></a>
+  </div>
 
   <div class="meta">
     <div class="row">
-      <span class="tag">SINGLE FILE</span>
+      <span class="tag">SINGLE FILES</span>
+      <span class="tag">ZERO DEPENDENCIES</span>
+      <span class="tag">OFFLINE FIRST</span>
+      <span class="tag">MIT LICENSE</span>
+    </div>
+    <div class="row">
+      <a href="https://github.com/ConsciousNode/Slice-of-Life">GitHub</a>
+      <a href="https://github.com/ConsciousNode/Slice-of-Life/blob/main/CHANGELOG.md">Changelog</a>
+      <a href="https://github.com/ConsciousNode/Slice-of-Life/blob/main/GOALS.md">Goals</a>
+      <a href="./slice-of-life-v0.2.html">older versions</a>
+    </div>
+    <div>Kham Kizer · Kehai Interim · Komorebi · Vael Interim · Ed Interim · 2026</div>
+  </div>
+</main>">SINGLE FILE</span>
       <span class="tag">ZERO DEPENDENCIES</span>
       <span class="tag">OFFLINE FIRST</span>
       <span class="tag">MIT LICENSE</span>

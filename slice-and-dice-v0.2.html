@@ -1,0 +1,1340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Slice and Dice — ConsciousNode SoftWorks</title>
+<!--
+  Slice and Dice v0.2
+  ConsciousNode SoftWorks · 2026-06-21
+  Kham Kizer · Vael Interim
+
+  v0.1 — Baked physics animation studio. Load .soli / .sost. Export .soan.
+          Timeline scrubber, physics + static track types, pick-to-select.
+
+  v0.2 — .sost v0.3 env block (terrain + preset) rendered in viewport.
+          Camera wx/wy/wz world pivot imported from Studio for matched framing.
+          Free-fly camera (WASD + mode toggle) matching Studio muscle memory.
+          TMAC-inspired material response tables (same curve system as
+            SliceWorks Engine v0.2 — Dice and Engine now physically consistent).
+          joint_states stub read and stored on import (ready for v0.4 posing).
+          .soan export: parametric (initial conditions) OR baked (all 300 frames).
+
+  Import: .soli (Slice of Life v0.1+) · .sost (Slice Studio v0.1+ / v0.3)
+  Export: .soan v0.2 (parametric or baked)
+
+  Renderer credit:   isometric engine from Slice Studio (Kehai Interim)
+  Physics credit:    TMAC table pattern from SliceWorks Engine v0.2 (Ed Interim)
+                     original TMAC: HTMLNLM (Kehai Interim)
+  Format credit:     .sost v0.3 env/cam blocks (Komorebi)
+
+  Xinu-compliant. Zero dependencies. Single file. MIT License.
+  https://github.com/ConsciousNode
+-->
+<style>
+:root {
+  --bg:      #0b0a0f;
+  --panel:   #13121a;
+  --border:  #1e1c28;
+  --amber:   #e8a040;
+  --amber2:  #7a4e18;
+  --aglow:   rgba(232,160,64,.08);
+  --teal:    #4ab8c8;
+  --tglow:   rgba(74,184,200,.10);
+  --steel:   #5080b0;
+  --text:    #8090b0;
+  --text-hi: #c0d0e8;
+  --text-lo: #384058;
+  --green:   #50c080;
+  --red:     #c05050;
+  --stone:   #5a5878;
+  --mono:    ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
+  --t:       .14s ease;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{font-family:var(--mono);background:var(--bg);color:var(--text);
+  height:100%;overflow:hidden;font-size:11px;}
+::-webkit-scrollbar{width:4px;}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
+
+/* ── HEADER ── */
+header{display:flex;align-items:center;gap:8px;padding:5px 12px;
+  border-bottom:1px solid var(--border);background:var(--panel);flex-shrink:0;flex-wrap:wrap;}
+.logo{color:var(--amber);letter-spacing:.2em;font-size:13px;font-weight:800;}
+.sub{color:var(--text-lo);font-size:8px;letter-spacing:.12em;}
+.hsep{width:1px;height:18px;background:var(--border);flex-shrink:0;}
+.hbtn{font-family:var(--mono);font-size:9px;letter-spacing:.1em;padding:3px 9px;
+  background:none;border:1px solid var(--border);color:var(--text);cursor:pointer;
+  transition:border-color var(--t),color var(--t),background var(--t);white-space:nowrap;}
+.hbtn:hover{border-color:var(--amber);color:var(--amber);}
+.hbtn.pri{border-color:var(--amber2);color:var(--amber);}
+.hbtn.pri:hover{border-color:var(--amber);background:var(--aglow);}
+.hbtn.on{border-color:var(--teal);color:var(--teal);background:var(--tglow);}
+.ml-auto{margin-left:auto;}
+
+/* ── MAIN ── */
+main{flex:1;display:flex;overflow:hidden;min-height:0;}
+
+/* ── LEFT PANEL ── */
+.left{width:180px;flex-shrink:0;border-right:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden;background:var(--panel);}
+.panel-hd{font-size:8px;letter-spacing:.2em;color:var(--text-lo);
+  padding:6px 10px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.lib-list{flex:1;overflow-y:auto;padding:6px;}
+.lib-item{padding:5px 8px;border:1px solid var(--border);margin-bottom:4px;}
+.lib-name{color:var(--text-hi);font-size:10px;margin-bottom:1px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.lib-dim{color:var(--text-lo);font-size:8px;}
+.lib-btn{width:100%;margin-top:4px;font-family:var(--mono);font-size:8px;
+  letter-spacing:.1em;padding:3px 0;background:none;border:1px solid var(--border);
+  color:var(--text);cursor:pointer;transition:border-color var(--t),color var(--t);}
+.lib-btn:hover{border-color:var(--amber);color:var(--amber);}
+.lib-load{display:block;width:calc(100% - 12px);margin:6px;font-family:var(--mono);
+  font-size:9px;letter-spacing:.1em;padding:4px;background:none;
+  border:1px dashed var(--amber2);color:var(--amber);cursor:pointer;text-align:center;
+  transition:border-color var(--t),background var(--t);}
+.lib-load:hover{border-color:var(--amber);background:var(--aglow);}
+
+/* ── ENV INFO ── */
+.env-info{padding:6px 10px;border-top:1px solid var(--border);font-size:8px;
+  color:var(--text-lo);flex-shrink:0;}
+.env-info span{color:var(--teal);}
+
+/* ── CENTER ── */
+.center{flex:1;display:flex;flex-direction:column;min-width:0;}
+.viewport-wrap{flex:1;position:relative;overflow:hidden;}
+canvas#cv{display:block;width:100%;height:100%;}
+canvas#pickCv{display:none;}
+#vp-empty{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  text-align:center;color:var(--text-lo);font-size:10px;line-height:2;
+  pointer-events:none;}
+#vp-empty b{display:block;font-size:13px;color:var(--border);margin-bottom:6px;}
+
+/* ── TIMELINE ── */
+.timeline{flex-shrink:0;border-top:1px solid var(--border);background:var(--panel);}
+.transport{display:flex;align-items:center;gap:6px;padding:4px 10px;
+  border-bottom:1px solid var(--border);flex-wrap:wrap;}
+.tbtn{font-family:var(--mono);font-size:13px;background:none;border:none;
+  color:var(--text);cursor:pointer;padding:1px 4px;line-height:1;}
+.tbtn:hover{color:var(--amber);}
+.frame-info{color:var(--text-lo);font-size:9px;}
+.frame-val{color:var(--text-hi);}
+.loop-btn{font-size:8px;letter-spacing:.1em;padding:2px 6px;background:none;
+  border:1px solid var(--border);color:var(--text-lo);cursor:pointer;
+  font-family:var(--mono);transition:border-color var(--t),color var(--t);}
+.loop-btn.on{border-color:var(--amber2);color:var(--amber);}
+.scrubber{flex:1;min-width:60px;height:3px;background:var(--border);
+  cursor:pointer;appearance:none;outline:none;}
+.scrubber::-webkit-slider-thumb{appearance:none;width:10px;height:10px;
+  background:var(--amber);border-radius:50%;margin-top:-3.5px;}
+.scrubber::-webkit-slider-runnable-track{height:3px;background:var(--border);}
+.tl-tracks{max-height:72px;overflow-y:auto;}
+.tl-row{display:flex;align-items:center;height:20px;border-bottom:1px solid var(--border);}
+.tl-label{width:110px;flex-shrink:0;padding:0 8px;color:var(--text-lo);font-size:8px;
+  border-right:1px solid var(--border);white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;cursor:pointer;}
+.tl-label:hover,.tl-label.selected{color:var(--amber);}
+.tl-type{width:52px;flex-shrink:0;font-size:7px;letter-spacing:.06em;
+  color:var(--steel);padding:0 5px;border-right:1px solid var(--border);}
+.tl-bar{flex:1;height:100%;position:relative;overflow:hidden;}
+.tl-track-line{position:absolute;top:50%;left:0;right:0;height:1px;background:var(--border);}
+.tl-dot{position:absolute;top:50%;width:5px;height:5px;
+  background:var(--amber);border-radius:50%;transform:translate(-50%,-50%);}
+.tl-cursor{position:absolute;top:0;bottom:0;width:1px;background:rgba(232,160,64,.45);}
+
+/* ── RIGHT PANEL ── */
+.right{width:210px;flex-shrink:0;border-left:1px solid var(--border);
+  display:flex;flex-direction:column;overflow-y:auto;background:var(--panel);}
+.pr-section{padding:8px 10px;border-bottom:1px solid var(--border);}
+.pr-hd{font-size:8px;letter-spacing:.16em;color:var(--text-lo);margin-bottom:6px;}
+.pr-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;}
+.pr-label{font-size:8px;color:var(--text-lo);}
+.pr-val{font-size:9px;color:var(--text-hi);}
+.pr-input{width:76px;font-family:var(--mono);font-size:9px;background:var(--bg);
+  border:1px solid var(--border);color:var(--text-hi);padding:2px 4px;text-align:right;
+  transition:border-color var(--t);}
+.pr-input:focus{outline:none;border-color:var(--amber);}
+.pr-none{color:var(--text-lo);font-size:9px;font-style:italic;}
+.track-sel{width:100%;font-family:var(--mono);font-size:9px;background:var(--bg);
+  border:1px solid var(--border);color:var(--text-hi);padding:2px 4px;margin-top:3px;
+  transition:border-color var(--t);}
+.track-sel:focus{outline:none;border-color:var(--amber);}
+.pr-hint{font-size:8px;color:var(--text-lo);margin-top:5px;line-height:1.5;}
+.sim-badge{font-size:8px;padding:1px 6px;border:1px solid var(--border);
+  display:inline-block;margin-bottom:4px;}
+.sim-badge.ok{border-color:#285a38;color:var(--green);}
+.sim-badge.warn{border-color:var(--amber2);color:var(--amber);}
+
+/* ── FOOTER ── */
+footer{font-size:8px;color:var(--text-lo);padding:3px 12px;
+  border-top:1px solid var(--border);display:flex;gap:14px;flex-shrink:0;
+  background:var(--panel);overflow:hidden;}
+footer span{letter-spacing:.06em;white-space:nowrap;}
+#ft-status{margin-left:auto;color:var(--amber);}
+
+input[type=file]{display:none;}
+</style>
+</head>
+<body style="display:flex;flex-direction:column;height:100dvh;">
+
+<header>
+  <div>
+    <div class="logo">SLICE AND DICE</div>
+    <div class="sub">v0.2 · ConsciousNode SoftWorks</div>
+  </div>
+  <div class="hsep"></div>
+  <button class="hbtn" id="btn-new">New</button>
+  <button class="hbtn" id="btn-load-sost">Load .sost</button>
+  <div class="hsep"></div>
+  <button class="hbtn" id="btn-cam-mode">ORBIT</button>
+  <div class="hsep"></div>
+  <button class="hbtn" id="btn-bake">Bake</button>
+  <div class="ml-auto"></div>
+  <button class="hbtn pri" id="btn-save-soan">Save .soan</button>
+  <button class="hbtn" id="btn-save-baked">Save .soan (baked)</button>
+</header>
+
+<main>
+  <!-- LEFT: library + env info -->
+  <div class="left">
+    <div class="panel-hd">LIBRARY</div>
+    <button class="lib-load" id="btn-load-soli">+ Load .soli model</button>
+    <div class="lib-list" id="lib-list"></div>
+    <div class="env-info" id="env-info">env: <span>none</span></div>
+  </div>
+
+  <!-- CENTER: viewport + timeline -->
+  <div class="center">
+    <div class="viewport-wrap" id="vp-wrap">
+      <canvas id="cv"></canvas>
+      <canvas id="pickCv"></canvas>
+      <div id="vp-empty">
+        <b>Scene is empty</b>
+        Load a .soli model and Place it,<br>
+        or load a .sost scene file.
+      </div>
+    </div>
+
+    <div class="timeline">
+      <div class="transport">
+        <button class="tbtn" id="btn-reset" title="Reset to frame 0">⏮</button>
+        <button class="tbtn" id="btn-play" title="Play / Pause">▶</button>
+        <button class="tbtn" id="btn-step" title="Step one frame">⏭</button>
+        <input type="range" class="scrubber" id="scrubber" min="0" max="299" value="0">
+        <span class="frame-info">f <span class="frame-val" id="frame-val">0</span>/<span id="frame-total">299</span></span>
+        <span style="font-size:8px;color:var(--text-lo)">60fps</span>
+        <button class="loop-btn on" id="btn-loop">LOOP</button>
+        <span style="font-size:8px;color:var(--text-lo);margin-left:4px;" id="sim-fps"></span>
+      </div>
+      <input type="range" class="scrubber" id="scrubber2" min="0" max="299" value="0"
+        style="width:calc(100% - 20px);margin:3px 10px;">
+      <div class="tl-tracks" id="tl-tracks"></div>
+    </div>
+  </div>
+
+  <!-- RIGHT: properties -->
+  <div class="right">
+    <div class="pr-section">
+      <div class="pr-hd">SIM STATUS</div>
+      <span class="sim-badge warn" id="sim-badge">READY</span>
+    </div>
+    <div class="pr-section">
+      <div class="pr-hd">SCENE PHYSICS</div>
+      <div class="pr-row">
+        <span class="pr-label">Gravity</span>
+        <input class="pr-input" id="ph-gravity" type="number" value="-9.8" step="0.1">
+      </div>
+      <div class="pr-row">
+        <span class="pr-label">Floor Y</span>
+        <input class="pr-input" id="ph-floor-y" type="number" value="0" step="0.5">
+      </div>
+      <div class="pr-row">
+        <span class="pr-label">Solver</span>
+        <span class="pr-val" style="font-size:8px;color:var(--teal)">TMAC table</span>
+      </div>
+    </div>
+    <div class="pr-section" id="pr-instance">
+      <div class="pr-hd">SELECTED INSTANCE</div>
+      <div class="pr-none" id="pr-none">Click an instance to select it.</div>
+      <div id="pr-fields" style="display:none">
+        <div class="pr-row"><span class="pr-label">Model</span>
+          <span class="pr-val" id="pr-model-name" style="font-size:8px;max-width:110px;
+            overflow:hidden;text-overflow:ellipsis;white-space:nowrap">—</span></div>
+        <div class="pr-hd" style="margin-top:8px">POSITION</div>
+        <div class="pr-row"><span class="pr-label">X</span>
+          <input class="pr-input" id="pr-px" type="number" step="0.5"></div>
+        <div class="pr-row"><span class="pr-label">Y</span>
+          <input class="pr-input" id="pr-py" type="number" step="0.5"></div>
+        <div class="pr-row"><span class="pr-label">Z</span>
+          <input class="pr-input" id="pr-pz" type="number" step="0.5"></div>
+        <div class="pr-hd" style="margin-top:8px">INITIAL VELOCITY</div>
+        <div class="pr-row"><span class="pr-label">vX</span>
+          <input class="pr-input" id="pr-vx" type="number" step="0.1" value="0"></div>
+        <div class="pr-row"><span class="pr-label">vY</span>
+          <input class="pr-input" id="pr-vy" type="number" step="0.1" value="0"></div>
+        <div class="pr-row"><span class="pr-label">vZ</span>
+          <input class="pr-input" id="pr-vz" type="number" step="0.1" value="0"></div>
+        <div class="pr-hd" style="margin-top:8px">ANGULAR VELOCITY</div>
+        <div class="pr-row"><span class="pr-label">ωX</span>
+          <input class="pr-input" id="pr-ax" type="number" step="0.05" value="0"></div>
+        <div class="pr-row"><span class="pr-label">ωY</span>
+          <input class="pr-input" id="pr-ay" type="number" step="0.05" value="0"></div>
+        <div class="pr-row"><span class="pr-label">ωZ</span>
+          <input class="pr-input" id="pr-az" type="number" step="0.05" value="0"></div>
+        <div class="pr-hd" style="margin-top:8px">TRACK TYPE</div>
+        <select class="track-sel" id="pr-track-type">
+          <option value="physics">physics</option>
+          <option value="static">static</option>
+        </select>
+        <div class="pr-hint">Physics: sim drives from initial conditions.<br>
+          Static: never moves (set pieces, terrain).</div>
+        <button class="lib-btn" id="btn-remove"
+          style="margin-top:8px;border-color:var(--red);color:var(--red);">
+          Remove from scene</button>
+      </div>
+    </div>
+    <div class="pr-section">
+      <div class="pr-hd">CAMERA</div>
+      <div class="pr-row"><span class="pr-label">Mode</span>
+        <span class="pr-val" id="cam-mode-lbl">ORBIT</span></div>
+      <div class="pr-hint" id="cam-hint">Drag: orbit · Right-drag: pan<br>
+        Scroll: zoom · Click: select</div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <span id="ft-instances">0 instances</span>
+  <span id="ft-terrain">0 terrain voxels</span>
+  <span id="ft-status"></span>
+</footer>
+
+<input type="file" id="fi-soli" accept=".soli">
+<input type="file" id="fi-sost" accept=".sost">
+
+<script>
+'use strict';
+
+// ════════════════════════════════════════════════════════════════
+//  SLICE AND DICE v0.2
+//  Animation studio for the ConsciousNode voxel suite.
+//  ConsciousNode SoftWorks · Xinu-compliant · Zero dependencies
+// ════════════════════════════════════════════════════════════════
+
+const TOTAL_FRAMES = 300;
+const FPS          = 60;
+const DT           = 1 / FPS;
+
+// ════════════════════════════════════════════════════════════════
+//  MATERIAL TABLE  (v0.2 — TMAC-inspired, same system as
+//  SliceWorks Engine v0.2 so Dice and Engine are consistent)
+//
+//  Each rigid material carries:
+//    density   — mass per voxel
+//    curve     — [[velocity, restitution], ...] control points
+//    friction  — kinetic friction coefficient
+//
+//  At load time we precompute RESP_TABLE and FRIC_TABLE so
+//  every collision is a lookup, not a branch tree.
+//  Same BIN_SIZE (0.05) as SliceWorks so both tools agree.
+// ════════════════════════════════════════════════════════════════
+const BIN_SIZE = 0.05;
+const MAX_VEL  = 12.0;   // m/s — animation can get fast
+const BINS     = Math.ceil(MAX_VEL / BIN_SIZE);
+
+const MAT = [
+  { name:'void',    density:0,      curve:null,                    friction:0    },
+  { name:'gas',     density:0.001,  curve:[[0,0.95],[12,0.95]],   friction:0.01 },
+  { name:'liquid',  density:1.000,  curve:[[0,0.00],[12,0.00]],   friction:0.80 },
+  { name:'soft',    density:0.500,  curve:[[0,0.70],[12,0.50]],   friction:0.40 },
+  { name:'tissue',  density:1.100,  curve:[[0,0.40],[12,0.20]],   friction:0.50 },
+  { name:'bone',    density:1.900,  curve:[[0,0.10],[12,0.10]],   friction:0.45 },
+  { name:'polymer', density:1.400,  curve:[[0,0.62],[12,0.68]],   friction:0.22 },
+  { name:'metal',   density:7.800,  curve:[[0,0.42],[1.2,0.30],[3.0,0.12],[12,0.06]], friction:0.30 },
+  { name:'dense',   density:11.30,  curve:[[0,0.04],[12,0.04]],   friction:0.55 },
+  { name:'wood',    density:0.650,  curve:[[0,0.14],[12,0.14]],   friction:0.50 },
+];
+const FLOOR_CURVE    = [[0,0.30],[12,0.30]];
+const FLOOR_FRICTION = 0.50;
+
+let RESP_TABLE, FLOOR_TABLE, FRIC_PAIR, FRIC_FLOOR;
+
+function sampleCurve(pts, v) {
+  if (!pts || !pts.length) return 0;
+  if (v <= pts[0][0]) return pts[0][1];
+  for (let i = 1; i < pts.length; i++) {
+    if (v <= pts[i][0]) {
+      const [v0,e0] = pts[i-1], [v1,e1] = pts[i];
+      return e0 + (e1-e0) * (v-v0) / ((v1-v0)||1);
+    }
+  }
+  return pts[pts.length-1][1];
+}
+
+function buildResponseTables() {
+  const n = MAT.length;
+  RESP_TABLE  = new Float32Array(n * n * BINS);
+  FLOOR_TABLE = new Float32Array(n * BINS);
+  FRIC_PAIR   = new Float32Array(n * n);
+  FRIC_FLOOR  = new Float32Array(n);
+
+  for (let a = 0; a < n; a++) {
+    const fa = MAT[a].friction || 0;
+    FRIC_FLOOR[a] = (fa + FLOOR_FRICTION) * 0.5;
+    for (let bin = 0; bin < BINS; bin++) {
+      const v  = bin * BIN_SIZE;
+      const ea = MAT[a].curve ? sampleCurve(MAT[a].curve, v) : 0;
+      const ef = sampleCurve(FLOOR_CURVE, v);
+      FLOOR_TABLE[a * BINS + bin] = Math.min(ea, ef);
+    }
+    for (let b = 0; b < n; b++) {
+      FRIC_PAIR[a*n+b] = (fa + (MAT[b].friction||0)) * 0.5;
+      for (let bin = 0; bin < BINS; bin++) {
+        const v  = bin * BIN_SIZE;
+        const ea = MAT[a].curve ? sampleCurve(MAT[a].curve, v) : 0;
+        const eb = MAT[b].curve ? sampleCurve(MAT[b].curve, v) : 0;
+        RESP_TABLE[(a*n+b)*BINS+bin] = Math.min(ea, eb);
+      }
+    }
+  }
+}
+buildResponseTables();
+
+const lookupFloorE  = (mat, v) =>
+  FLOOR_TABLE[mat*BINS + Math.min(BINS-1, Math.floor(Math.abs(v)/BIN_SIZE))];
+const lookupPairE   = (a, b, v) =>
+  RESP_TABLE[(a*MAT.length+b)*BINS + Math.min(BINS-1, Math.floor(Math.abs(v)/BIN_SIZE))];
+const lookupFricFloor = mat => FRIC_FLOOR[mat];
+const lookupFricPair  = (a,b) => FRIC_PAIR[a*MAT.length+b];
+
+// ════════════════════════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════════════════════════
+const S = {
+  models:    [],
+  instances: [],
+  selected:  null,
+  nextId:    0,
+  cam: {
+    rotY: Math.PI/4, rotX: -0.45, zoom: 1.2, panX: 0, panY: 0,
+    mode: 'orbit',   // 'orbit' | 'free'
+    wx: 0, wy: 0, wz: 0,  // world-space pivot (free mode)
+  },
+  env: {
+    preset:  'none',
+    terrain: new Map(),   // Map<"x,z", true>
+  },
+  playing:   false,
+  loop:      true,
+  frame:     0,
+  baked:     [],
+  simDirty:  true,
+  lastFpsTime: 0,
+};
+
+// ════════════════════════════════════════════════════════════════
+//  CANVAS
+// ════════════════════════════════════════════════════════════════
+const cv     = document.getElementById('cv');
+const pickCv = document.getElementById('pickCv');
+let _raf = false;
+
+function resize() {
+  const wrap = document.getElementById('vp-wrap');
+  cv.width  = wrap.clientWidth;
+  cv.height = wrap.clientHeight;
+  render();
+}
+new ResizeObserver(resize).observe(document.getElementById('vp-wrap'));
+
+// ════════════════════════════════════════════════════════════════
+//  RENDERER  (isometric engine — Kehai Interim, adapted)
+// ════════════════════════════════════════════════════════════════
+function rotVec(x, y, z, rX, rY, rZ) {
+  let x1 = x*Math.cos(rY)+z*Math.sin(rY), y1=y, z1=-x*Math.sin(rY)+z*Math.cos(rY);
+  let x2=x1, y2=y1*Math.cos(rX)-z1*Math.sin(rX), z2=y1*Math.sin(rX)+z1*Math.cos(rX);
+  let x3=x2*Math.cos(rZ)-y2*Math.sin(rZ), y3=x2*Math.sin(rZ)+y2*Math.cos(rZ);
+  return [x3, y3, z2];
+}
+
+function projectPt(wx, wy, wz, camY, camX, CELL, OX, OY) {
+  const cY=Math.cos(camY), sY=Math.sin(camY);
+  const { wx:CX, wy:CY, wz:CZ } = S.cam;
+  const rx = (wx-CX)*cY + (wz-CZ)*sY;
+  const rz = -(wx-CX)*sY + (wz-CZ)*cY;
+  const cX=Math.cos(camX), sX=Math.sin(camX);
+  const ry_f = (wy-CY)*cX - rz*sX;
+  return { sx: rx*CELL + OX, sy: -ry_f*CELL + OY };
+}
+
+function depthOf(wx, wy, wz, camY, camX) {
+  const { wx:CX, wy:CY, wz:CZ } = S.cam;
+  const cY=Math.cos(camY), sY=Math.sin(camY);
+  const rz = -(wx-CX)*sY + (wz-CZ)*cY;
+  const cX=Math.cos(camX), sX=Math.sin(camX);
+  return (wy-CY)*sX + rz*cX;
+}
+
+function adjColor(hex, f) {
+  const r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16);
+  const t=Math.abs(f)*0.55, blend=f>=0?255:0;
+  return `rgb(${Math.round(r+(blend-r)*t)},${Math.round(g+(blend-g)*t)},${Math.round(b+(blend-b)*t)})`;
+}
+
+function pickEnc(i) { return `rgb(${(i>>8)&0xFF},${i&0xFF},200)`; }
+function pickDec(r,g,b) { return b===200 ? (r<<8)|g : -1; }
+
+// ── SOLI PARSER ──────────────────────────────────────────────────
+function getV(model, gx, gy, gz) {
+  if (gx<0||gy<0||gz<0||gx>=model.RX||gy>=model.RY||gz>=model.RZ) return 0;
+  return model.voxels[gx + gy*model.RX + gz*model.RX*model.RY];
+}
+
+function buildSurf(model) {
+  const { RX, RY, RZ } = model;
+  const surf = [];
+  for (let gz=0; gz<RZ; gz++)
+    for (let gy=0; gy<RY; gy++)
+      for (let gx=0; gx<RX; gx++) {
+        const m = getV(model,gx,gy,gz);
+        if (!m) continue;
+        if (!getV(model,gx+1,gy,gz) || !getV(model,gx-1,gy,gz) ||
+            !getV(model,gx,gy+1,gz) || !getV(model,gx,gy-1,gz) ||
+            !getV(model,gx,gy,gz+1) || !getV(model,gx,gy,gz-1))
+          surf.push({ gx, gy, gz, m });
+      }
+  model.surf = surf;
+}
+
+function parseSoli(json, name) {
+  const d = typeof json === 'string' ? JSON.parse(json) : json;
+  if (d.magic !== 'SOLI') throw new Error('Not a .soli file');
+  const bin = atob(d.voxels);
+  const voxels = new Uint8Array(bin.length);
+  for (let i=0; i<bin.length; i++) voxels[i] = bin.charCodeAt(i);
+  const model = {
+    name: name || 'model.soli', soli: d, voxels,
+    RX: d.resolution.x, RY: d.resolution.y, RZ: d.resolution.z,
+    materials: d.materials || [], surf: null,
+    // Dominant material index for physics table lookups
+    domMat: 6,   // polymer default
+  };
+  buildSurf(model);
+  // Detect dominant material (most-used non-void voxel mat name → index)
+  const matCounts = {};
+  for (let i=0; i<voxels.length; i++) {
+    const v = voxels[i]; if (!v) continue;
+    matCounts[v] = (matCounts[v]||0) + 1;
+  }
+  let bestIdx = 1, bestCount = 0;
+  for (const k in matCounts) {
+    if (matCounts[k] > bestCount) { bestCount = matCounts[k]; bestIdx = +k; }
+  }
+  // Map .soli material slot index → MAT table index by name
+  const slotMat = model.materials[bestIdx];
+  if (slotMat?.name) {
+    const found = MAT.findIndex(m => m.name === slotMat.name.toLowerCase());
+    if (found > 0) model.domMat = found;
+  }
+  return model;
+}
+
+// ── RENDER ───────────────────────────────────────────────────────
+function render() { if (!_raf) { _raf = true; requestAnimationFrame(_render); } }
+
+function _render() {
+  _raf = false;
+  const W = cv.width, H = cv.height;
+  if (!W || !H) return;
+  const ctx = cv.getContext('2d');
+  const { rotY, rotX, zoom, panX, panY } = S.cam;
+  const CELL = Math.max(1, Math.floor(Math.min(W,H) / (64*2.2) * zoom));
+  const OX   = W/2 + panX;
+  const OY   = H/2 + panY;
+
+  ctx.fillStyle = '#0b0a0f';
+  ctx.fillRect(0, 0, W, H);
+
+  _drawGrid(ctx, rotY, rotX, CELL, OX, OY);
+  _drawEnvPreset(ctx, rotY, rotX, CELL, OX, OY);
+
+  const frameState = getFrameState(S.frame);
+  const all = [];
+
+  // Instance voxels
+  for (let ii=0; ii<S.instances.length; ii++) {
+    const inst  = S.instances[ii];
+    const model = S.models[inst.modelIdx];
+    if (!model?.surf) continue;
+    const fs = frameState[inst.id] || {
+      x:inst.x, y:inst.y, z:inst.z,
+      rotX:inst.rotX||0, rotY:inst.rotY||0, rotZ:inst.rotZ||0,
+    };
+    const cx = model.RX/2, cz = model.RZ/2;
+    for (const sv of model.surf) {
+      const lx=sv.gx-cx, ly=sv.gy, lz=sv.gz-cz;
+      const [rx,ry,rz] = rotVec(lx,ly,lz, fs.rotX,fs.rotY,fs.rotZ);
+      const wx=rx+fs.x, wy=ry+fs.y, wz=rz+fs.z;
+      all.push({ gx:sv.gx,gy:sv.gy,gz:sv.gz, m:sv.m, wx,wy,wz,
+                 inst,ii,fs, depth:depthOf(wx,wy,wz,rotY,rotX) });
+    }
+  }
+
+  // Terrain voxels (world y=0)
+  for (const k of S.env.terrain.keys()) {
+    const [tx, tz] = k.split(',').map(Number);
+    all.push({ type:'terrain', tx, tz,
+               wx:tx, wy:0, wz:tz,
+               depth:depthOf(tx, 0, tz, rotY, rotX) });
+  }
+
+  all.sort((a, b) => b.depth - a.depth);
+
+  pickCv.width = W; pickCv.height = H;
+  const pCtx = pickCv.getContext('2d');
+  pCtx.fillStyle = '#000'; pCtx.fillRect(0, 0, W, H);
+
+  for (const v of all) {
+    if (v.type === 'terrain') {
+      _drawTerrainVoxel(ctx, v, rotY, rotX, CELL, OX, OY);
+      continue;
+    }
+
+    const { inst, ii, wx, wy, wz, gx, gy, gz, m, fs } = v;
+    const model  = S.models[inst.modelIdx];
+    const col    = model.materials[m]?.color ?? '#8090a0';
+    const isSel  = inst.id === S.selected;
+    const P = (dx,dy,dz) => {
+      const [rx,ry,rz] = rotVec(dx,dy,dz, fs.rotX,fs.rotY,fs.rotZ);
+      return projectPt(wx+rx, wy+ry, wz+rz, rotY, rotX, CELL, OX, OY);
+    };
+    const p000=P(0,0,0),p100=P(1,0,0),p010=P(0,1,0),p110=P(1,1,0);
+    const p001=P(0,0,1),p101=P(1,0,1),p011=P(0,1,1),p111=P(1,1,1);
+    const pc = pickEnc(ii);
+    const drawFace = (bright, pts) => {
+      let c = adjColor(col, bright + (isSel ? 0.16 : 0));
+      ctx.fillStyle = c;
+      ctx.beginPath(); ctx.moveTo(pts[0].sx, pts[0].sy);
+      for (let j=1; j<pts.length; j++) ctx.lineTo(pts[j].sx, pts[j].sy);
+      ctx.closePath(); ctx.fill();
+      pCtx.fillStyle = pc;
+      pCtx.beginPath(); pCtx.moveTo(pts[0].sx, pts[0].sy);
+      for (let j=1; j<pts.length; j++) pCtx.lineTo(pts[j].sx, pts[j].sy);
+      pCtx.closePath(); pCtx.fill();
+    };
+    if (!getV(model,gx,  gy+1,gz  )) drawFace( 0.30,[p010,p110,p111,p011]);
+    if (!getV(model,gx-1,gy,  gz  )) drawFace( 0.10,[p000,p010,p011,p001]);
+    if (!getV(model,gx,  gy,  gz-1)) drawFace( 0.15,[p000,p100,p110,p010]);
+    if (!getV(model,gx+1,gy,  gz  )) drawFace( 0.00,[p100,p110,p111,p101]);
+    if (!getV(model,gx,  gy,  gz+1)) drawFace(-0.20,[p001,p101,p111,p011]);
+    if (!getV(model,gx,  gy-1,gz  )) drawFace(-0.40,[p000,p100,p101,p001]);
+    if (isSel) {
+      const o = projectPt(fs.x, fs.y, fs.z, rotY, rotX, CELL, OX, OY);
+      ctx.fillStyle = 'rgba(232,160,64,0.9)';
+      ctx.beginPath(); ctx.arc(o.sx, o.sy, 3.5, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#0b0a0f';
+      ctx.beginPath(); ctx.arc(o.sx, o.sy, 1.5, 0, Math.PI*2); ctx.fill();
+    }
+  }
+
+  document.getElementById('vp-empty').style.display =
+    (!S.instances.length && !S.env.terrain.size) ? 'block' : 'none';
+  updateTimelineCursor();
+}
+
+function _drawTerrainVoxel(ctx, v, rotY, rotX, CELL, OX, OY) {
+  const { tx, tz } = v;
+  const COL = '#5a5878';
+  const P = (dx,dy,dz) => projectPt(tx+dx, 0+dy, tz+dz, rotY, rotX, CELL, OX, OY);
+  const p000=P(0,0,0),p100=P(1,0,0),p010=P(0,1,0),p110=P(1,1,0);
+  const p001=P(0,0,1),p101=P(1,0,1),p011=P(0,1,1),p111=P(1,1,1);
+  const df = (bright, pts) => {
+    ctx.fillStyle = adjColor(COL, bright);
+    ctx.beginPath(); ctx.moveTo(pts[0].sx, pts[0].sy);
+    for (let j=1; j<pts.length; j++) ctx.lineTo(pts[j].sx, pts[j].sy);
+    ctx.closePath(); ctx.fill();
+  };
+  df( 0.30,[p010,p110,p111,p011]);
+  if (!S.env.terrain.has(`${tx-1},${tz}`)) df( 0.10,[p000,p010,p011,p001]);
+  if (!S.env.terrain.has(`${tx},${tz-1}`)) df( 0.15,[p000,p100,p110,p010]);
+  if (!S.env.terrain.has(`${tx+1},${tz}`)) df( 0.00,[p100,p110,p111,p101]);
+  if (!S.env.terrain.has(`${tx},${tz+1}`)) df(-0.20,[p001,p101,p111,p011]);
+}
+
+function _drawGrid(ctx, rotY, rotX, CELL, OX, OY) {
+  const HALF=128, STEP=8;
+  const proj = (wx, wz) => projectPt(wx, 0, wz, rotY, rotX, CELL, OX, OY);
+  ctx.strokeStyle = 'rgba(255,255,255,0.025)'; ctx.lineWidth = 0.5;
+  for (let i=-HALF; i<=HALF; i+=STEP) {
+    const a=proj(i,-HALF), b=proj(i,HALF);
+    ctx.beginPath(); ctx.moveTo(a.sx,a.sy); ctx.lineTo(b.sx,b.sy); ctx.stroke();
+    const c=proj(-HALF,i), d=proj(HALF,i);
+    ctx.beginPath(); ctx.moveTo(c.sx,c.sy); ctx.lineTo(d.sx,d.sy); ctx.stroke();
+  }
+  ctx.strokeStyle = 'rgba(74,184,200,0.15)'; ctx.lineWidth = 1;
+  const ax1=proj(-HALF,0), ax2=proj(HALF,0);
+  ctx.beginPath(); ctx.moveTo(ax1.sx,ax1.sy); ctx.lineTo(ax2.sx,ax2.sy); ctx.stroke();
+  const az1=proj(0,-HALF), az2=proj(0,HALF);
+  ctx.beginPath(); ctx.moveTo(az1.sx,az1.sy); ctx.lineTo(az2.sx,az2.sy); ctx.stroke();
+}
+
+function _drawEnvPreset(ctx, rotY, rotX, CELL, OX, OY) {
+  const preset = S.env.preset;
+  if (preset === 'none') return;
+  const isRoom = preset === 'room_small' || preset === 'room_large';
+  const hf     = preset === 'room_large' ? 32 : 16;
+  const wallH  = preset === 'room_large' ? 24 : 16;
+  const P = (wx,wy,wz) => projectPt(wx, wy, wz, rotY, rotX, CELL, OX, OY);
+  // Floor
+  const fl=P(-hf,-1,-hf), fr=P(hf,-1,-hf), bl=P(-hf,-1,hf), br=P(hf,-1,hf);
+  ctx.fillStyle = '#131226';
+  ctx.beginPath(); ctx.moveTo(fl.sx,fl.sy); ctx.lineTo(fr.sx,fr.sy);
+  ctx.lineTo(br.sx,br.sy); ctx.lineTo(bl.sx,bl.sy); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.04)'; ctx.lineWidth = 0.5;
+  for (let i=-hf; i<=hf; i+=4) {
+    const a=P(i,-1,-hf), b=P(i,-1,hf);
+    ctx.beginPath(); ctx.moveTo(a.sx,a.sy); ctx.lineTo(b.sx,b.sy); ctx.stroke();
+    const c=P(-hf,-1,i), d=P(hf,-1,i);
+    ctx.beginPath(); ctx.moveTo(c.sx,c.sy); ctx.lineTo(d.sx,d.sy); ctx.stroke();
+  }
+  if (!isRoom) return;
+  const walls = [
+    [P(-hf,-1,-hf),P(hf,-1,-hf),P(hf,wallH,-hf),P(-hf,wallH,-hf),-0.10],
+    [P(-hf,-1, hf),P(hf,-1, hf),P(hf,wallH, hf),P(-hf,wallH, hf),-0.20],
+    [P(-hf,-1,-hf),P(-hf,-1,hf),P(-hf,wallH,hf),P(-hf,wallH,-hf),-0.15],
+    [P( hf,-1,-hf),P( hf,-1,hf),P( hf,wallH,hf),P( hf,wallH,-hf),-0.05],
+  ];
+  for (const [c0,c1,c2,c3,bright] of walls) {
+    ctx.fillStyle = adjColor('#1a1830', bright);
+    ctx.beginPath(); ctx.moveTo(c0.sx,c0.sy); ctx.lineTo(c1.sx,c1.sy);
+    ctx.lineTo(c2.sx,c2.sy); ctx.lineTo(c3.sx,c3.sy); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(74,184,200,0.05)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(c0.sx,c0.sy); ctx.lineTo(c1.sx,c1.sy);
+    ctx.lineTo(c2.sx,c2.sy); ctx.lineTo(c3.sx,c3.sy); ctx.closePath(); ctx.stroke();
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+//  PHYSICS SIMULATION (TMAC table edition)
+// ════════════════════════════════════════════════════════════════
+function getDomMat(model) { return model?.domMat ?? 6; }
+
+function computeMass(model) {
+  const mat = MAT[getDomMat(model)];
+  let count = 0;
+  for (let i=0; i<model.voxels.length; i++) if (model.voxels[i]) count++;
+  return Math.max(0.1, count * (mat.density||1) * 0.001);
+}
+
+function computeRadius(model) {
+  return Math.max(model.RX, model.RY, model.RZ) / 2;
+}
+
+function bakeSimulation() {
+  const gravity   = parseFloat(document.getElementById('ph-gravity').value) || -9.8;
+  const floorY    = parseFloat(document.getElementById('ph-floor-y').value) || 0;
+
+  const states = S.instances.map(inst => {
+    const model  = S.models[inst.modelIdx];
+    const mass   = model ? computeMass(model) : 1;
+    const radius = model ? computeRadius(model)/2 : 1;
+    const domMat = getDomMat(model);
+    return {
+      id: inst.id,
+      x:inst.x, y:inst.y, z:inst.z,
+      rotX:inst.rotX||0, rotY:inst.rotY||0, rotZ:inst.rotZ||0,
+      vx:inst.vx||0, vy:inst.vy||0, vz:inst.vz||0,
+      ax:inst.ax||0, ay:inst.ay||0, az:inst.az||0,
+      mass, radius, domMat,
+      trackType: inst.trackType || 'physics',
+    };
+  });
+
+  const baked = Array.from({ length: TOTAL_FRAMES }, () => ({}));
+
+  for (let f=0; f<TOTAL_FRAMES; f++) {
+    for (const st of states) {
+      baked[f][st.id] = {
+        x:st.x, y:st.y, z:st.z,
+        rotX:st.rotX, rotY:st.rotY, rotZ:st.rotZ,
+      };
+    }
+
+    for (const st of states) {
+      if (st.trackType === 'static') continue;
+
+      // Gravity + integrate
+      st.vy += gravity * DT;
+      st.x  += st.vx * DT;
+      st.y  += st.vy * DT;
+      st.z  += st.vz * DT;
+      st.rotX += st.ax * DT;
+      st.rotY += st.ay * DT;
+      st.rotZ += st.az * DT;
+
+      // Floor collision (TMAC table lookup)
+      const bottom = st.y - st.radius;
+      if (bottom < floorY) {
+        st.y = floorY + st.radius;
+        const speed = Math.abs(st.vy);
+        const e     = lookupFloorE(st.domMat, speed);
+        const fric  = 1 - lookupFricFloor(st.domMat);
+        st.vy = st.vy < 0 ? (speed * e < 0.04 ? 0 : speed * e) : st.vy;
+        st.vx *= fric; st.vz *= fric;
+        st.ax *= e * 0.75; st.ay *= 0.97; st.az *= e * 0.75;
+      }
+
+      // Inter-body sphere collision (TMAC pair lookup)
+      for (const other of states) {
+        if (other.id === st.id || other.trackType === 'static') continue;
+        const dx=st.x-other.x, dy=st.y-other.y, dz=st.z-other.z;
+        const dist = Math.sqrt(dx*dx+dy*dy+dz*dz);
+        const minD = st.radius + other.radius;
+        if (dist < minD && dist > 0.001) {
+          const nx=dx/dist, ny=dy/dist, nz=dz/dist;
+          const overlap = (minD-dist)*0.5;
+          st.x+=nx*overlap;    st.y+=ny*overlap;    st.z+=nz*overlap;
+          other.x-=nx*overlap; other.y-=ny*overlap; other.z-=nz*overlap;
+          const dvx=st.vx-other.vx, dvy=st.vy-other.vy, dvz=st.vz-other.vz;
+          const dot = dvx*nx+dvy*ny+dvz*nz;
+          if (dot < 0) {
+            const relV = Math.abs(dot);
+            const e = lookupPairE(st.domMat, other.domMat, relV);
+            const J = -(1+e)*dot / (1/st.mass + 1/other.mass);
+            const fric = 1 - lookupFricPair(st.domMat, other.domMat);
+            st.vx    += J/st.mass*nx;    other.vx -= J/other.mass*nx;
+            st.vy    += J/st.mass*ny;    other.vy -= J/other.mass*ny;
+            st.vz    += J/st.mass*nz;    other.vz -= J/other.mass*nz;
+            st.vx    *= fric; st.vz *= fric;
+            other.vx *= fric; other.vz *= fric;
+            const spin = Math.hypot(dvx,dvy,dvz)*0.25;
+            st.ax    += (-dvy*nz+dvz*ny)*spin;
+            st.ay    += (-dvz*nx+dvx*nz)*spin;
+            st.az    += (-dvx*ny+dvy*nx)*spin;
+          }
+        }
+      }
+    }
+  }
+
+  S.baked    = baked;
+  S.simDirty = false;
+  setSimBadge('BAKED', 'ok');
+}
+
+function getFrameState(frame) {
+  if (S.simDirty) bakeSimulation();
+  return S.baked[Math.min(frame, TOTAL_FRAMES-1)] || {};
+}
+
+function markDirty() {
+  S.simDirty = true;
+  setSimBadge('DIRTY', 'warn');
+}
+
+function setSimBadge(text, cls) {
+  const el = document.getElementById('sim-badge');
+  el.textContent = text;
+  el.className = 'sim-badge ' + cls;
+}
+
+// ════════════════════════════════════════════════════════════════
+//  PLAYBACK
+// ════════════════════════════════════════════════════════════════
+let _playRaf = null, _lastTime = 0, _accumTime = 0;
+
+function play() {
+  S.playing = true;
+  document.getElementById('btn-play').textContent = '⏸';
+  if (!_playRaf) {
+    _lastTime = performance.now();
+    _playRaf  = requestAnimationFrame(_playLoop);
+  }
+}
+
+function pause() {
+  S.playing = false;
+  document.getElementById('btn-play').textContent = '▶';
+  if (_playRaf) { cancelAnimationFrame(_playRaf); _playRaf = null; }
+}
+
+function _playLoop(now) {
+  if (!S.playing) { _playRaf = null; return; }
+  const dt = (now - _lastTime) / 1000;
+  _lastTime = now;
+  _accumTime += dt;
+  while (_accumTime >= DT) {
+    _accumTime -= DT;
+    S.frame++;
+    if (S.frame >= TOTAL_FRAMES) {
+      if (S.loop) { S.frame = 0; }
+      else { S.frame = TOTAL_FRAMES-1; pause(); break; }
+    }
+  }
+  updateScrubber();
+  render();
+  if (now - S.lastFpsTime > 600) {
+    document.getElementById('sim-fps').textContent = Math.round(1/Math.max(0.001,dt))+'fps';
+    S.lastFpsTime = now;
+  }
+  _playRaf = requestAnimationFrame(_playLoop);
+}
+
+function updateScrubber() {
+  document.getElementById('scrubber').value  = S.frame;
+  document.getElementById('scrubber2').value = S.frame;
+  document.getElementById('frame-val').textContent = S.frame;
+}
+
+function updateTimelineCursor() {
+  const pct = (S.frame / (TOTAL_FRAMES-1) * 100).toFixed(2) + '%';
+  for (const inst of S.instances) {
+    const el = document.getElementById('tl-cursor-' + inst.id);
+    if (el) el.style.left = pct;
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+//  TIMELINE
+// ════════════════════════════════════════════════════════════════
+function rebuildTimeline() {
+  const tl = document.getElementById('tl-tracks');
+  tl.innerHTML = '';
+  for (const inst of S.instances) {
+    const model  = S.models[inst.modelIdx];
+    const name   = model ? model.name : 'unknown';
+    const type   = inst.trackType || 'physics';
+    const isSel  = inst.id === S.selected;
+    const row = document.createElement('div');
+    row.className = 'tl-row';
+    row.innerHTML = `
+      <div class="tl-label${isSel?' selected':''}">${name}</div>
+      <div class="tl-type">${type}</div>
+      <div class="tl-bar">
+        <div class="tl-track-line"></div>
+        <div class="tl-dot" style="left:0%"></div>
+        <div class="tl-cursor" id="tl-cursor-${inst.id}"></div>
+      </div>`;
+    row.querySelector('.tl-label').addEventListener('click', () => selectInstance(inst.id));
+    tl.appendChild(row);
+  }
+  updateTimelineCursor();
+  document.getElementById('ft-instances').textContent =
+    S.instances.length + ' instance' + (S.instances.length!==1?'s':'');
+  document.getElementById('ft-terrain').textContent =
+    S.env.terrain.size + ' terrain voxel' + (S.env.terrain.size!==1?'s':'');
+}
+
+// ════════════════════════════════════════════════════════════════
+//  INSTANCE MANAGEMENT
+// ════════════════════════════════════════════════════════════════
+function addInstance(modelIdx) {
+  const model = S.models[modelIdx];
+  const inst  = {
+    id: S.nextId++, modelIdx,
+    x:0, y:model ? model.RY/2+2 : 8, z:0,
+    rotX:0, rotY:0, rotZ:0,
+    vx:0, vy:0, vz:0,
+    ax:(Math.random()-0.5)*3, ay:(Math.random()-0.5)*3, az:(Math.random()-0.5)*3,
+    trackType: 'physics',
+    joint_states: [],
+  };
+  S.instances.push(inst);
+  selectInstance(inst.id);
+  markDirty();
+  rebuildTimeline();
+  render();
+}
+
+function removeInstance(id) {
+  S.instances = S.instances.filter(i => i.id !== id);
+  if (S.selected === id) S.selected = null;
+  markDirty(); rebuildTimeline(); updateProps(); render();
+}
+
+function selectInstance(id) {
+  S.selected = id;
+  updateProps(); rebuildTimeline(); render();
+}
+
+function getSelected() { return S.instances.find(i => i.id === S.selected) || null; }
+
+function updateProps() {
+  const inst = getSelected();
+  document.getElementById('pr-none').style.display   = inst ? 'none'  : 'block';
+  document.getElementById('pr-fields').style.display = inst ? 'block' : 'none';
+  if (!inst) return;
+  const model = S.models[inst.modelIdx];
+  document.getElementById('pr-model-name').textContent = model ? model.name : '?';
+  document.getElementById('pr-px').value = inst.x.toFixed(2);
+  document.getElementById('pr-py').value = inst.y.toFixed(2);
+  document.getElementById('pr-pz').value = inst.z.toFixed(2);
+  document.getElementById('pr-vx').value = (inst.vx||0).toFixed(2);
+  document.getElementById('pr-vy').value = (inst.vy||0).toFixed(2);
+  document.getElementById('pr-vz').value = (inst.vz||0).toFixed(2);
+  document.getElementById('pr-ax').value = (inst.ax||0).toFixed(2);
+  document.getElementById('pr-ay').value = (inst.ay||0).toFixed(2);
+  document.getElementById('pr-az').value = (inst.az||0).toFixed(2);
+  document.getElementById('pr-track-type').value = inst.trackType || 'physics';
+}
+
+function applyPropsToSelected() {
+  const inst = getSelected(); if (!inst) return;
+  inst.x  = parseFloat(document.getElementById('pr-px').value) || 0;
+  inst.y  = parseFloat(document.getElementById('pr-py').value) || 0;
+  inst.z  = parseFloat(document.getElementById('pr-pz').value) || 0;
+  inst.vx = parseFloat(document.getElementById('pr-vx').value) || 0;
+  inst.vy = parseFloat(document.getElementById('pr-vy').value) || 0;
+  inst.vz = parseFloat(document.getElementById('pr-vz').value) || 0;
+  inst.ax = parseFloat(document.getElementById('pr-ax').value) || 0;
+  inst.ay = parseFloat(document.getElementById('pr-ay').value) || 0;
+  inst.az = parseFloat(document.getElementById('pr-az').value) || 0;
+  inst.trackType = document.getElementById('pr-track-type').value;
+  markDirty(); render();
+}
+
+// ════════════════════════════════════════════════════════════════
+//  CAMERA
+// ════════════════════════════════════════════════════════════════
+function toggleCamMode() {
+  S.cam.mode = S.cam.mode === 'orbit' ? 'free' : 'orbit';
+  const btn = document.getElementById('btn-cam-mode');
+  btn.textContent = S.cam.mode === 'free' ? 'FREE' : 'ORBIT';
+  btn.classList.toggle('on', S.cam.mode === 'free');
+  document.getElementById('cam-mode-lbl').textContent = S.cam.mode.toUpperCase();
+  document.getElementById('cam-hint').textContent = S.cam.mode === 'free'
+    ? 'WASD: move · Drag: look · Right-drag: pan\nScroll: zoom · Click: select'
+    : 'Drag: orbit · Right-drag: pan\nScroll: zoom · Click: select';
+  render();
+}
+
+function moveCam(dx, dy, dz) {
+  const { rotY } = S.cam;
+  const cY=Math.cos(rotY), sY=Math.sin(rotY);
+  S.cam.wx += cY*dx - sY*dz;
+  S.cam.wy += dy;
+  S.cam.wz += sY*dx + cY*dz;
+  render();
+}
+
+// ── CANVAS MOUSE ─────────────────────────────────────────────────
+const drag = { active:false, right:false, lx:0, ly:0, moved:false };
+
+cv.addEventListener('mousedown', e => {
+  drag.active = true; drag.right = e.button===2;
+  drag.lx = e.clientX; drag.ly = e.clientY; drag.moved = false;
+  if (!drag.right) cv.style.cursor = 'grabbing';
+  e.preventDefault();
+});
+
+window.addEventListener('mousemove', e => {
+  if (!drag.active) return;
+  const dx = e.clientX - drag.lx, dy = e.clientY - drag.ly;
+  drag.lx = e.clientX; drag.ly = e.clientY;
+  if (Math.abs(dx)>1||Math.abs(dy)>1) drag.moved = true;
+  if (drag.right) {
+    S.cam.panX += dx; S.cam.panY += dy;
+  } else {
+    S.cam.rotY += dx * 0.008;
+    S.cam.rotX  = Math.max(-Math.PI/2+0.05, Math.min(-0.05, S.cam.rotX + dy*0.008));
+  }
+  render();
+});
+
+window.addEventListener('mouseup', e => {
+  if (!drag.active) return;
+  cv.style.cursor = 'grab';
+  if (!drag.right && !drag.moved) {
+    // Pick instance
+    const rect = cv.getBoundingClientRect();
+    const scX  = cv.width/rect.width, scY = cv.height/rect.height;
+    const px   = Math.round((e.clientX-rect.left)*scX);
+    const py   = Math.round((e.clientY-rect.top)*scY);
+    if (px>=0&&py>=0&&px<pickCv.width&&py<pickCv.height) {
+      const d = pickCv.getContext('2d').getImageData(px,py,1,1).data;
+      const idx = pickDec(d[0],d[1],d[2]);
+      if (idx>=0&&idx<S.instances.length) {
+        selectInstance(S.instances[idx].id);
+      } else {
+        S.selected=null; updateProps(); rebuildTimeline(); render();
+      }
+    }
+  }
+  drag.active = false;
+});
+
+cv.addEventListener('contextmenu', e => e.preventDefault());
+cv.style.cursor = 'grab';
+
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  S.cam.zoom = Math.max(0.2, Math.min(8, S.cam.zoom * (e.deltaY>0?0.92:1.09)));
+  render();
+}, { passive:false });
+
+// ── KEYBOARD ─────────────────────────────────────────────────────
+const keysDown = new Set();
+window.addEventListener('keydown', e => {
+  keysDown.add(e.key.toLowerCase());
+  if (e.target.tagName==='INPUT'||e.target.tagName==='SELECT') return;
+  const inst = getSelected();
+  const step = e.shiftKey ? 5 : 1;
+  const isFree = S.cam.mode === 'free';
+
+  switch (e.key) {
+    case 'ArrowLeft':  if(inst){inst.x-=step;markDirty();updateProps();render();}break;
+    case 'ArrowRight': if(inst){inst.x+=step;markDirty();updateProps();render();}break;
+    case 'ArrowUp':    if(inst){inst.z-=step;markDirty();updateProps();render();}break;
+    case 'ArrowDown':  if(inst){inst.z+=step;markDirty();updateProps();render();}break;
+    case 'PageUp':   if(inst){inst.y+=step;markDirty();updateProps();render();}
+                     else if(isFree){moveCam(0,step*2,0);} break;
+    case 'PageDown': if(inst){inst.y-=step;markDirty();updateProps();render();}
+                     else if(isFree){moveCam(0,-step*2,0);} break;
+    case 'q': case 'Q': if(!isFree&&inst){inst.rotY-=Math.PI/12;markDirty();render();}break;
+    case 'e': case 'E': if(!isFree&&inst){inst.rotY+=Math.PI/12;markDirty();render();}break;
+    case 'r': case 'R': if(inst){inst.rotX-=Math.PI/12;markDirty();render();}break;
+    case 'f': case 'F': if(inst){inst.rotX+=Math.PI/12;markDirty();render();}break;
+    case 't': case 'T': if(inst){inst.rotZ-=Math.PI/12;markDirty();render();}break;
+    case 'g': case 'G': if(inst){inst.rotZ+=Math.PI/12;markDirty();render();}break;
+    case ' ': e.preventDefault(); S.playing ? pause() : play(); break;
+    case 'Delete': case 'Backspace': if(inst) removeInstance(inst.id); break;
+  }
+});
+window.addEventListener('keyup', e => keysDown.delete(e.key.toLowerCase()));
+
+// Free-fly WASD continuous movement
+(function wasdLoop() {
+  if (S.cam.mode === 'free' && (keysDown.has('w')||keysDown.has('a')||keysDown.has('s')||keysDown.has('d'))) {
+    const sp = 0.6;
+    if (keysDown.has('w')) moveCam(0,0, sp);
+    if (keysDown.has('s')) moveCam(0,0,-sp);
+    if (keysDown.has('a')) moveCam(-sp,0,0);
+    if (keysDown.has('d')) moveCam( sp,0,0);
+  }
+  requestAnimationFrame(wasdLoop);
+})();
+
+// ════════════════════════════════════════════════════════════════
+//  .SOST IMPORT (v0.2 + v0.3)
+// ════════════════════════════════════════════════════════════════
+function importSost(json) {
+  const d = JSON.parse(json);
+  if (d.format !== 'sost') throw new Error('Not a .sost file');
+  S.models=[]; S.instances=[]; S.selected=null; S.nextId=0;
+
+  // Camera — read wx/wy/wz world pivot (v0.3 addition)
+  if (d.camera) {
+    Object.assign(S.cam, {
+      rotY:0.52, rotX:-0.62, zoom:1.0, panX:0, panY:0,
+      mode:'orbit', wx:0, wy:0, wz:0,
+    }, d.camera);
+    // Sync camera mode button
+    const btn = document.getElementById('btn-cam-mode');
+    btn.textContent = S.cam.mode==='free' ? 'FREE' : 'ORBIT';
+    btn.classList.toggle('on', S.cam.mode==='free');
+    document.getElementById('cam-mode-lbl').textContent = S.cam.mode.toUpperCase();
+  }
+
+  // Environment block (v0.3 addition — graceful fallback for v0.2)
+  S.env.preset  = d.environment?.preset  ?? 'none';
+  S.env.terrain = new Map();
+  for (const [x,z] of (d.environment?.terrain ?? [])) {
+    S.env.terrain.set(`${x},${z}`, true);
+  }
+  document.getElementById('env-info').innerHTML =
+    `env: <span>${S.env.preset}</span> · <span>${S.env.terrain.size}</span> terrain`;
+
+  // Library
+  for (const e of (d.library   || [])) S.models.push(parseSoli(e.soli, e.name));
+
+  // Instances — read joint_states stub (v0.3, ready for v0.4 posing)
+  for (const i of (d.instances || [])) {
+    S.instances.push({
+      id:i.id, modelIdx:i.modelIdx,
+      x:i.x||0, y:i.y||0, z:i.z||0,
+      rotX:i.rotX||0, rotY:i.rotY||0, rotZ:i.rotZ||0,
+      vx:0, vy:0, vz:0,
+      ax:(Math.random()-0.5)*2, ay:(Math.random()-0.5)*2, az:(Math.random()-0.5)*2,
+      trackType:'physics',
+      joint_states: i.joint_states || [],   // stub: populated by Studio v0.4
+    });
+    if (i.id >= S.nextId) S.nextId = i.id+1;
+  }
+
+  markDirty(); rebuildLib(); rebuildTimeline(); render();
+}
+
+// ════════════════════════════════════════════════════════════════
+//  .SOAN EXPORT  (v0.2 — parametric OR baked)
+// ════════════════════════════════════════════════════════════════
+function exportSoan(bakeMode) {
+  if (S.simDirty) bakeSimulation();
+
+  const soan = {
+    magic:'SOAN', version:'0.2',
+    created:new Date().toISOString(),
+    duration_frames:TOTAL_FRAMES, fps:FPS,
+    export_mode: bakeMode ? 'baked' : 'parametric',
+    physics:{
+      gravity:  parseFloat(document.getElementById('ph-gravity').value)||-9.8,
+      floor_y:  parseFloat(document.getElementById('ph-floor-y').value)||0,
+      solver:   'tmac_table',
+      bin_size: BIN_SIZE,
+    },
+    tracks: S.instances.map(inst => {
+      const model = S.models[inst.modelIdx];
+      const track = {
+        model_name:   model ? model.name : 'unknown',
+        instance_id:  inst.id,
+        type:         inst.trackType || 'physics',
+        joint_states: inst.joint_states || [],
+        initial: {
+          position: [inst.x, inst.y, inst.z],
+          rotation: [inst.rotX||0, inst.rotY||0, inst.rotZ||0],
+          velocity: [inst.vx||0, inst.vy||0, inst.vz||0],
+          angular_velocity: [inst.ax||0, inst.ay||0, inst.az||0],
+        },
+      };
+      if (bakeMode) {
+        // Embed all 300 frames of baked position/rotation
+        track.frames = S.baked.map(f => {
+          const fs = f[inst.id];
+          if (!fs) return null;
+          return [
+            Math.round(fs.x*1000)/1000,
+            Math.round(fs.y*1000)/1000,
+            Math.round(fs.z*1000)/1000,
+            Math.round(fs.rotX*10000)/10000,
+            Math.round(fs.rotY*10000)/10000,
+            Math.round(fs.rotZ*10000)/10000,
+          ];
+        });
+      }
+      return track;
+    }),
+    environment: {
+      preset:  S.env.preset,
+      terrain: [...S.env.terrain.keys()].map(k => k.split(',').map(Number)),
+    },
+  };
+
+  const blob = new Blob([JSON.stringify(soan, null, bakeMode ? 0 : 2)],
+    { type:'application/octet-stream' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = bakeMode ? 'animation.baked.soan' : 'animation.soan';
+  a.click(); URL.revokeObjectURL(a.href);
+  setStatus(bakeMode ? 'Saved baked .soan (all 300 frames embedded)' : 'Saved parametric .soan');
+}
+
+// ════════════════════════════════════════════════════════════════
+//  LIBRARY UI
+// ════════════════════════════════════════════════════════════════
+function rebuildLib() {
+  const list = document.getElementById('lib-list');
+  list.innerHTML = '';
+  S.models.forEach((model, idx) => {
+    const div = document.createElement('div');
+    div.className = 'lib-item';
+    div.innerHTML = `
+      <div class="lib-name" title="${model.name}">${model.name}</div>
+      <div class="lib-dim">${model.RX} × ${model.RY} × ${model.RZ}</div>
+      <button class="lib-btn" data-idx="${idx}">Place in scene</button>`;
+    div.querySelector('button').addEventListener('click', () => addInstance(idx));
+    list.appendChild(div);
+  });
+}
+
+// ════════════════════════════════════════════════════════════════
+//  FILE IO
+// ════════════════════════════════════════════════════════════════
+document.getElementById('btn-load-soli').addEventListener('click',
+  () => document.getElementById('fi-soli').click());
+document.getElementById('fi-soli').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = ev => {
+    try {
+      S.models.push(parseSoli(ev.target.result, f.name));
+      rebuildLib(); setStatus('Loaded: ' + f.name);
+    } catch(err) { alert('Error loading .soli:\n'+err.message); }
+  };
+  r.readAsText(f); e.target.value='';
+});
+
+document.getElementById('btn-load-sost').addEventListener('click',
+  () => document.getElementById('fi-sost').click());
+document.getElementById('fi-sost').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = ev => {
+    try { importSost(ev.target.result); setStatus('Loaded scene: ' + f.name); }
+    catch(err) { alert('Error loading .sost:\n'+err.message); }
+  };
+  r.readAsText(f); e.target.value='';
+});
+
+document.getElementById('btn-save-soan').addEventListener('click',    () => exportSoan(false));
+document.getElementById('btn-save-baked').addEventListener('click',   () => exportSoan(true));
+document.getElementById('btn-bake').addEventListener('click', () => { bakeSimulation(); render(); });
+
+document.getElementById('btn-new').addEventListener('click', () => {
+  if (S.instances.length && !confirm('Start a new scene? Unsaved changes will be lost.')) return;
+  S.models=[]; S.instances=[]; S.selected=null; S.nextId=0;
+  S.frame=0; S.baked=[]; S.simDirty=true;
+  S.env.preset='none'; S.env.terrain=new Map();
+  Object.assign(S.cam,{rotY:Math.PI/4,rotX:-0.45,zoom:1.2,panX:0,panY:0,mode:'orbit',wx:0,wy:0,wz:0});
+  document.getElementById('btn-cam-mode').textContent='ORBIT';
+  document.getElementById('btn-cam-mode').classList.remove('on');
+  document.getElementById('env-info').innerHTML='env: <span>none</span>';
+  pause(); rebuildLib(); rebuildTimeline(); updateProps(); setSimBadge('READY','warn'); render();
+  setStatus('New scene');
+});
+
+document.getElementById('btn-cam-mode').addEventListener('click', toggleCamMode);
+
+// ── TRANSPORT ────────────────────────────────────────────────────
+document.getElementById('btn-play').addEventListener('click', () => S.playing ? pause() : play());
+document.getElementById('btn-reset').addEventListener('click', () => {
+  pause(); S.frame=0; updateScrubber(); render();
+});
+document.getElementById('btn-step').addEventListener('click', () => {
+  S.frame = Math.min(S.frame+1, TOTAL_FRAMES-1); updateScrubber(); render();
+});
+document.getElementById('btn-loop').addEventListener('click', () => {
+  S.loop = !S.loop;
+  document.getElementById('btn-loop').classList.toggle('on', S.loop);
+});
+
+function onScrub(e) {
+  S.frame = parseInt(e.target.value);
+  document.getElementById('scrubber').value  = S.frame;
+  document.getElementById('scrubber2').value = S.frame;
+  document.getElementById('frame-val').textContent = S.frame;
+  render();
+}
+document.getElementById('scrubber').addEventListener('input', onScrub);
+document.getElementById('scrubber2').addEventListener('input', onScrub);
+
+// ── PROPERTY INPUTS ──────────────────────────────────────────────
+['pr-px','pr-py','pr-pz','pr-vx','pr-vy','pr-vz','pr-ax','pr-ay','pr-az','pr-track-type']
+  .forEach(id => document.getElementById(id).addEventListener('change', applyPropsToSelected));
+['ph-gravity','ph-floor-y']
+  .forEach(id => document.getElementById(id).addEventListener('change', () => { markDirty(); render(); }));
+document.getElementById('btn-remove').addEventListener('click', () => {
+  const inst = getSelected(); if (inst) removeInstance(inst.id);
+});
+
+// ── UTILITIES ────────────────────────────────────────────────────
+function setStatus(msg) {
+  document.getElementById('ft-status').textContent = msg;
+  setTimeout(() => document.getElementById('ft-status').textContent = '', 3500);
+}
+
+// ── INIT ─────────────────────────────────────────────────────────
+document.getElementById('frame-total').textContent = TOTAL_FRAMES - 1;
+resize();
+render();
+</script>
+</body>
+</html>
